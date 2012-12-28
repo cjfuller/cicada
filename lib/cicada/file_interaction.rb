@@ -24,22 +24,116 @@
 #  * ***** END LICENSE BLOCK ***** */
 #++
 
+require 'ostruct'
+
 module Cicada
 
   class FileInteraction
 
-    def position_data_filename(p)
+
+    REQUIRED_PARAMETERS = [:dirname_set, :basename_set, :mask_relative_dirname, :mask_extra_extension, :data_directory, :correction_date, :output_positions_to_directory]
+
+    OPTIONAL_PARAMETERS = [:in_situ_aberr_corr_basename_set]
+
+    POS_XML_EXTENSION = "_position_data.xml"
+
+    CORR_XML_EXTENSION = "_correction.xml"
+
+    DIFFS_TXT_EXTENSION = "_diffs.txt"
+
+    MULTI_NAME_SEP = ","
+
+    def self.position_data_filename(p)
+      dir = p[:data_directory]
+      File.expand_path(p[:basename_set].split(MULTI_NAME_SEP)[0] + POS_XML_EXTENSION, dir)
+    end
+
+    def self.position_file_exists?(p)
+      File.exist?(FileInteraction.position_data_filename(p))
+    end
+
+    def self.read_position_data(p)
+      
+      fn = FileInteraction.position_data_filename(p)
+
+      data_str = nil
+
+      File.open(fn) do |f|
+        data_str = f.read
+      end
+
+      FileInteraction.unserialize_xml_position_data(data_str)
+
+    end
+
+    def unserialize_xml_position_data(data_str)
       #TODO
     end
 
-    def position_file_exists?(p)
+    def self.list_files(p)
+
+      dirnames = p[:dirname_set].split(MULTI_NAME_SEP)
+      basenames = p[:basename_set].split(MULTI_NAME_SEP)
+
+      image_sets = []
+
+      dirnames.each do |d|
+
+        mask_dirname = File.join(d, p[:mask_relative_dirname])
+
+        Dir.foreach(d) do |f|
+
+          #is there an #any method on Enumerable?
+          if basenames.reduce(false) { |a,e| a or f.match(e) } then
+            
+            im = File.expand_path(f, d)
+            msk = File.expand_path(f + p[:mask_extra_extension], mask_dirname)
+
+            #check this constructor
+            current = OpenStruct.new(image_fn: im, mask_fn: msk)
+            
+            image_sets << current
+
+          end          
+
+        end
+
+      end
+      
+      image_sets
+
+    end
+
+    def self.write_position_data(image_objects, p)
       #TODO
     end
 
-    def read_position_data(p)
-      #TODO
+    def self.correction_filename(p)
+
+      dir = p[:data_directory]
+      fn = p[:correction_date]
+
+      File.expand_path(fn + CORR_XML_EXTENSION, dir)
+
     end
 
+    def self.write_differences(diffs, p)
+
+      dirname = p[:output_positions_to_directory]
+      
+      fn = File.expand_path(p[:basename_set] + DIFFS_TXT_EXTENSION, dirname)
+
+      File.open(fn, 'w') do |f|
+
+        diffs.each do |d|
+
+          f.puts(d.to_s)
+
+        end
+
+      end
+
+    end
 
   end
 
