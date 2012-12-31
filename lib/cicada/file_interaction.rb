@@ -25,8 +25,68 @@
 #++
 
 require 'ostruct'
+require 'base64'
+require 'rexml/document'
 
 module Cicada
+
+  class Serialization
+
+
+    def self.serialize_image_objects(image_objects)
+
+      doc = REXML::Document.new
+
+      doc.add_element "root"
+
+      image_objects.each do |iobj|
+
+        in_doc = REXML::Document.new iobj.writeToXMLString
+
+        doc.root.add in_doc.elements[1,"image_object"]
+
+      end
+
+      output = ""
+
+      doc.write(output, 1)
+
+      output
+
+    end
+
+
+    def self.image_object_from_bytes(j_bytes)
+
+      oi = Java::java.io.ObjectInputStream.new(Java::java.io.ByteArrayInputStream.new(j_bytes))
+
+      oi.readObject
+
+    end
+
+
+    def self.unserialize_image_objects(data)
+
+      objs = []
+
+      doc = REXML::Document.new data
+
+      doc.elements.each("*/image_object/serialized_form") do |el|
+
+        enc_bin_data = Base64.decode64(el.text)
+
+        j_bytes = enc_bin_data.to_java_bytes
+
+        objs << image_object_from_bytes(j_bytes)
+
+      end
+
+      objs
+
+    end
+
+  end
+
 
   class FileInteraction
 
@@ -62,12 +122,8 @@ module Cicada
         data_str = f.read
       end
 
-      FileInteraction.unserialize_xml_position_data(data_str)
+      Serialization.unserialize_image_objects(data_str)
 
-    end
-
-    def unserialize_xml_position_data(data_str)
-      #TODO
     end
 
     def self.list_files(p)
@@ -83,13 +139,11 @@ module Cicada
 
         Dir.foreach(d) do |f|
 
-          #is there an #any method on Enumerable?
-          if basenames.reduce(false) { |a,e| a or f.match(e) } then
+          if basenames.any? { |e| f.match(e) } then
             
             im = File.expand_path(f, d)
             msk = File.expand_path(f + p[:mask_extra_extension], mask_dirname)
 
-            #check this constructor
             current = OpenStruct.new(image_fn: im, mask_fn: msk)
             
             image_sets << current
@@ -105,7 +159,15 @@ module Cicada
     end
 
     def self.write_position_data(image_objects, p)
-      #TODO
+
+      fn = position_data_filename(p)
+
+      File.open(fn, 'w') do |f|
+
+        f.write(Serialization.serialize_image_objects(image_objects))
+
+      end
+
     end
 
     def self.correction_filename(p)
