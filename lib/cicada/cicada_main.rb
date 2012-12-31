@@ -25,6 +25,7 @@
 #++
 
 require 'cicada/file_interaction'
+require 'cicada/correction/correction'
 require 'ostruct'
 require 'logger'
 
