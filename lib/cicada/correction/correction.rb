@@ -25,8 +25,11 @@
 #++
 
 require 'rexml/document'
+require 'ostruct'
 
 module Cicada
+
+  class UnableToCorrectError < StandardError; end
 
   class Correction
 
@@ -57,20 +60,12 @@ module Cicada
       @reference_channel = reference_channel
       @correction_channel = correction_channel
       @distance_cutoffs = distance_cutoffs
-      @positions_for_correction = Matrix.zero(image_objects.size, 3)
 
-      image_objects.each_with_index do |iobj, i|
+      @positions_for_correction = Matrix.build do |r, c|
 
-        r = @positions_for_correction.row(i)
+        image_objects[r].getPositionForChannel(reference_chanel)[c]
 
-        r.each_index do |j|
-
-          r[j] = iobj.getPositionForChannel(reference_channel)[j]
-
-        end
-        
       end
-      
 
     end
 
@@ -152,36 +147,113 @@ module Cicada
 
     end
 
-    def correct_position(x, y)
-      
+
+    def calculate_normalized_dists_to_centroids(x,y)
+
       dists_to_centroids = @positions_for_correction.column[0].map { |x0| (x0-x)**2 }
 
       dists_to_centroids += @positions_for_correction.column[1].map { |y0| (y0-y)**2 }
 
-      dists_to_centroids.map! { |e| Math.sqrt(e) }
+      dists_to_centroids = dists_to_centroids.map { |e| Math.sqrt(e) }
 
-      dist_ratio = dists_to_centroids.map2(@distance_cutoffs) { |e1, e2| e1/e2 }
+      dists_to_centroids.map2(@distance_cutoffs) { |e1, e2| e1/e2 }
+
+    end
+
+
+    def calculate_weights(x, y) 
+
+      dist_ratio = calculate_normalized_dists_to_centroids(x,y)
 
       dist_ratio_mask = Vector.zero(dist_ratio.size)
 
-      dist_ratio_mask.map2(dist_ratio) { |e1, e2| e2 <= 1 ? 1 : 0 }
+      dist_ratio_mask = dist_ratio_mask.map2(dist_ratio) { |e1, e2| e2 <= 1 ? 1 : 0 }
 
       weights = dist_ratio.map { |e| -3*e**2 + 1 + 2*e**3 }
 
-      weights.map2!(dist_ratio_mask) { |e1, e2| e1*e2 }
+      weights.map2(dist_ratio_mask) { |e1, e2| e1*e2 }
 
-      sum_weights = weights.reduce(0.0) { |a,e| a + e }
+    end
+
+    
+    def find_points_for_correction(x,y)
+      
+      weights = calculate_weights(x,y)
 
       count_weights = weights.count { |e| e > 0 }
 
-      #TODO deal with inablility to correct
+      raise UnableToCorrectError, "Incomplete coverate in correction dataset at (x,y) = (#{x}, #{y})." if count_weights == 0
 
-      cx = Matrix.zeros(count_weights, @correction_x.column_size)
-      cy = Matrix.zeros(count_weights, @correction_y.column_size)
-      cz = Matrix.zeros(count_weights, @correction_z.column_size)
-      
-      #TODO -- finish
+      cx = Array.new(count_weights) { Array.new(@correction_x.column_size, 0.0) }
+      cy = Array.new(count_weights) { Array.new(@correction_y.column_size, 0.0) }
+      cz = Array.new(count_weights) { Array.new(@correction_z.column_size, 0.0) }
+     
+      x_vec = Array.new(count_weights, 0.0)
+      y_vec = Array.new(count_weights, 0.0)
 
+      kept_weights = Array.new(count_weights, 0.0)
+
+      kept_counter = 0
+
+      weights.each_with_index do |w, i|
+
+        if w > 0 then
+
+          cx[kept_counter].replace(@correction_x.row(i))
+          cy[kept_counter].replace(@correction_y.row(i))
+          cz[kept_counter].replace(@correction_z.row(i))
+          
+          x_vec[kept_counter] = x - positions_for_correction[i,0]
+          y_vec[kept_counter] = y - positions_for_correction[i,1]
+
+          kept_weights[kept_counter] = weights[i]
+
+          kept_counter += 1
+
+        end
+
+      end
+
+      OpenStruct.new(cx_mat: Matrix[cx], 
+                     cy_mat: Matrix[cy], 
+                     cz_mat: Matrix[cz], 
+                     x_vec: Vector[x_vec], 
+                     y_vec: Vector[y_vec],
+                     weights: kept_weights)
+
+    end
+
+
+    def correct_position(x, y)
+ 
+      points = find_points_for_correction(x,y)
+
+      x_corr = 0
+      y_corr = 0
+      z_corr = 0
+
+      all_correction_parameters = Matrix.columns([Array.new(count_weights, 1.0), 
+                                                  points.x_vec, 
+                                                  points.y_vec, 
+                                                  points.x_vec.map { |e| e**2 }, 
+                                                  points.y_vec.map { |e| e**2 }, 
+                                                  points.x_vec.map2(y_vec) { |e1, e2| e1*e2 }])
+
+      count_weights.times do |i|
+
+        x_corr += all_correction_parameters.row(i).inner_product(points.cx_mat.row(i))*points.weights[i]
+        y_corr += all_correction_parameters.row(i).inner_product(points.cy_mat.row(i))*points.weights[i]
+        z_corr += all_correction_parameters.row(i).inner_product(points.cz_mat.row(i))*points.weights[i]
+
+      end
+
+      sum_weights = points.weights.reduce(0.0) { |a,e| a + e }
+
+      x_corr /= sum_weights
+      y_corr /= sum_weights
+      z_corr /= sum_weights
+
+      Vector[x_corr, y_corr, z_corr]
 
     end
 
