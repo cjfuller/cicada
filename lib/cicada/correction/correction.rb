@@ -26,6 +26,7 @@
 
 require 'rexml/document'
 require 'ostruct'
+require 'cicada/mutable_matrix'
 
 module Cicada
 
@@ -61,7 +62,7 @@ module Cicada
       @correction_channel = correction_channel
       @distance_cutoffs = distance_cutoffs
 
-      @positions_for_correction = Matrix.build do |r, c|
+      @positions_for_correction = MMatrix.build do |r, c|
 
         image_objects[r].getPositionForChannel(reference_chanel)[c]
 
@@ -130,6 +131,8 @@ module Cicada
     end
 
     def self.read_from_file(fn)
+
+      return nil unless File.exist?(fn)
       
       xml_str = ""
 
@@ -184,14 +187,14 @@ module Cicada
 
       raise UnableToCorrectError, "Incomplete coverate in correction dataset at (x,y) = (#{x}, #{y})." if count_weights == 0
 
-      cx = Array.new(count_weights) { Array.new(@correction_x.column_size, 0.0) }
-      cy = Array.new(count_weights) { Array.new(@correction_y.column_size, 0.0) }
-      cz = Array.new(count_weights) { Array.new(@correction_z.column_size, 0.0) }
-     
-      x_vec = Array.new(count_weights, 0.0)
-      y_vec = Array.new(count_weights, 0.0)
+      cx = MMatrix.zero(count_weights, @correction_x.column_size)
+      cy = MMatrix.zero(count_weights, @correction_y.column_size)
+      cz = MMatrix.zero(count_weights, @correction_z.column_size)
+      
+      x_vec = MVector.zero(count_weights)
+      y_vec = MVector.zero(count_weights)
 
-      kept_weights = Array.new(count_weights, 0.0)
+      kept_weights = MVector.zero(count_weights)
 
       kept_counter = 0
 
@@ -214,11 +217,11 @@ module Cicada
 
       end
 
-      OpenStruct.new(cx_mat: Matrix[cx], 
-                     cy_mat: Matrix[cy], 
-                     cz_mat: Matrix[cz], 
-                     x_vec: Vector[x_vec], 
-                     y_vec: Vector[y_vec],
+      OpenStruct.new(cx: cx, 
+                     cy: cy, 
+                     cz: cz, 
+                     x_vec: x_vec, 
+                     y_vec: y_vec,
                      weights: kept_weights)
 
     end
@@ -232,7 +235,7 @@ module Cicada
       y_corr = 0
       z_corr = 0
 
-      all_correction_parameters = Matrix.columns([Array.new(count_weights, 1.0), 
+      all_correction_parameters = MMatrix.columns([MVector.unit(count_weights), 
                                                   points.x_vec, 
                                                   points.y_vec, 
                                                   points.x_vec.map { |e| e**2 }, 
@@ -241,8 +244,8 @@ module Cicada
 
       count_weights.times do |i|
 
-        x_corr += all_correction_parameters.row(i).inner_product(points.cx_mat.row(i))*points.weights[i]
-        y_corr += all_correction_parameters.row(i).inner_product(points.cy_mat.row(i))*points.weights[i]
+        x_corr += all_correction_parameters.row(i).inner_product(points.cx.row(i))*points.weights[i]
+        y_corr += all_correction_parameters.row(i).inner_product(points.cy.row(i))*points.weights[i]
         z_corr += all_correction_parameters.row(i).inner_product(points.cz_mat.row(i))*points.weights[i]
 
       end
@@ -253,7 +256,7 @@ module Cicada
       y_corr /= sum_weights
       z_corr /= sum_weights
 
-      Vector[x_corr, y_corr, z_corr]
+      MVector[x_corr, y_corr, z_corr]
 
     end
 
