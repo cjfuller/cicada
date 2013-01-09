@@ -36,26 +36,49 @@ require 'facets/enumerable/ewise'
 require 'facets/math/mean'
 
 require 'rimageanalysistools/fitting/biquare_linear_fit'
+require 'rimageanalysistools/thread_queue'
 
 module Cicada
 
+  ##
+  # Generates and applies aberration corrections.  Used both for standard 3d 
+  # high-resolution colocalization corrections and in-situ corrections.
+  #
   class PositionCorrector
 
+    # parameters required by the methods in this class
     REQUIRED_PARAMETERS = [:pixelsize_nm, :z_sectionsize_nm, :num_points, :reference_channel, :channel_to_correct]
 
-    OPTIONAL_PARAMETERS = [:determine_correction, :max_threads, :in_situ_aberr_corr_channel, :inverted_z_axis]
+    # parmeters used but not required in this class or only required for optional functionality
+    OPTIONAL_PARAMETERS = [:determine_correction, :max_threads, :in_situ_aberr_corr_channel, :inverted_z_axis, :distable_in_situ_corr_constant_offset]
 
+    # Number of parameters used for correction (6, as this is the number of parameters 
+    # for a 2d quadratic fit)
     NUM_CORR_PARAM = 6
 
     attr_accessor :parameters, :pixel_to_distance_conversions
 
+    ##
+    # Constructs a new position corrector with the specified parameters
+    #
+    # @param [ParameterDictionary, Hash] p a hash-like object containing the analysis parameters
+    #
     def initialize(p)
       @parameters = p
       @pixel_to_distance_conversions = Vector[p[:pixelsize_nm], p[:pixelsize_nm], p[:z_sectionsize_nm]]
     end
 
+    ##
+    # Generates a correction from a specified array of image objects.
+    #
+    # @param [Array<ImageObject>] iobjs the image objects to be used for the correction
+    #
+    # @return [Correction] the correction generated from the input objects
+    #
     def generate_correction(iobjs)
       
+      #TODO refactor into smaller chunks
+
       ref_ch = parameters[:reference_channel].to_i
       corr_ch = parameters[:channel_to_correct].to_i
 
@@ -127,7 +150,15 @@ module Cicada
 
     end
 
-
+    ##
+    # Corrects an array of image objects using the provided correction.
+    #
+    # @param [Correction] c the correction to be used
+    # @param [Array<ImageObject>] iobjs the image objects to be corrected.
+    # 
+    # @return [Array<Numeric>] the corrected scalar difference between
+    #  wavelengths for each image object provided.
+    #
     def apply_correction(c, iobjs)
      
       ref_ch = @parameters[:reference_channel].to_i
@@ -159,10 +190,18 @@ module Cicada
       
       print_distance_components(vec_diffs, corrected_vec_diffs)
 
-      corrected_vec_diffs.map { |e| Vector[*e].norm ) } 
+      corrected_vec_diffs.map { |e| Vector[*e].norm  } 
 
     end
 
+    ##
+    # Prints the mean scalar and vector differences both corrected and uncorrected.
+    #
+    # @param [Array< Array<Numeric> >] vec_diffs an array of the uncorrected vector differences
+    # @param [Array< Array<Numeric> >] corrected_vec_diffs an array of the corrected vector differences
+    #
+    # @return [void]
+    #
     def print_distance_components(vec_diffs, corrected_vec_diffs)
 
       mean_uncorr_vec = [0.0, 0.0, 0.0] 
@@ -190,6 +229,16 @@ module Cicada
 
     end
 
+    ##
+    # Corrects a single image object for the two specified channels.
+    #
+    # @param [Correction] c the correction to be used
+    # @param [ImageObject] iobj the object being corrected
+    # @param [Integer] ref_ch the reference channel relative to which the other will be corrected
+    # @param [Integer] corr_ch the channel being corrected
+    #
+    # @return [Array<Numeric>] the corrected (x,y,z) vector difference between the two channels
+    #
     def correct_single_object(c, iobj, ref_ch, corr_ch)
       
       corr = c.correct_position(iobj.getPositionForChannel(ref_ch).getEntry(0), iobj.getPositionForChannel(corr_ch).getEntry(1))
@@ -202,10 +251,17 @@ module Cicada
 
       iobj.applyCorrectionVectorToChannel(corr_ch, corr)
       
-      iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch)
+      iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray
 
     end
 
+    ##
+    # Generates an in situ aberration correction (using the data specified in a parameter file)
+    #
+    # @return [Array< Array<Numeric> >] an array containing the x, y, and z corrections; each
+    #  correction is a 2-element array containing the slope and intercept for the fit in each
+    #  dimension.  The intercept will be zero if disabled in the parameter file.
+    #
     def generate_in_situ_correction
       
       ref_ch = @parameters[:reference_channel].to_i
@@ -223,7 +279,7 @@ module Cicada
 
       all_parameters = 0.upto(corr_diffs.column_size - 1).collect do |i|
 
-        bslf.fit_rb(corr_diffs.column(i), expt_diffs.column(i))
+        bslf.fit_rb(corr_diffs.column(i), expt_diffs.column(i)).toArray
 
       end
      
@@ -231,6 +287,16 @@ module Cicada
 
     end
 
+    ##
+    # Applies an in situ aberration correction to an array of image objects.
+    #
+    # @param [Enumerable<ImageObject>] iobjs the objects to be corrected
+    # @param [Array< Array<Numeric> >] corr_params the in situ correction parameters (an array
+    #  for each dimension containing the correction's slope and intercept).
+    # 
+    # @return [Array< Array <Numeric> >] an array of the corrected vector distance between
+    #  wavelengths for each image object being corrected.
+    #
     def apply_in_situ_correction(iobjs, corr_params)
 
       corr_params = corr_params.transpose
@@ -241,8 +307,8 @@ module Cicada
 
       corrected_differences = iobjs.map do |iobj|
         
-        corr_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, cicada_ch)
-        expt_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch)
+        corr_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, cicada_ch).toArray
+        expt_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray
 
         correction = (corr_diff.ewise * corr_params[0]).ewise + corr_params[1]
 
@@ -254,6 +320,14 @@ module Cicada
           
     end
 
+    ##
+    # Caluclates the target registration error (TRE) for an array of image objects
+    # to be used for correction.
+    #
+    # @param [Enumerable<ImageObject>] iobjs the objects whose TRE will be calculated
+    # 
+    # @return [Float] the (3d) TRE
+    #
     def determine_tre(iobjs)
       
       ref_ch = @parameters[:reference_channel].to_i
@@ -261,45 +335,57 @@ module Cicada
 
       threads = []
 
+      tq = RImageAnalysisTools::ThreadQueue.new
+
+      if @parameters[:max_threads]
+        tq.max_threads = @parameters[:max_threads]
+      end
+
       iobjs.each do |iobj|
 
-        threads << Thread.new(iobj, iobjs) do |obj, objs|
-
-          temp_objs = objs.select { |e| e != obj }
-
-          c = generate_correction(temp_objs)
-
-          pos = obj,getPositionForChannel(ref_ch)
-
-          result = OpenStruct.new
-
-          begin
+        RImageAnalysisTools::ThreadQueue.new_scope_with_vars(iobj, iobjs) do |obj, objs|
+          
+          tq.enqueue do 
             
-            corr = c.correct_position(pos.getEntry(0), pos.getEntry(1))
+            temp_objs = objs.select { |e| e != obj }
 
-            result.success = true
+            c = generate_correction(temp_objs)
 
-            tre_vec = obj.getVectorDifferenceBetweenChannels(ref_ch, corr_ch).ewise - corr
+            pos = obj,getPositionForChannel(ref_ch)
+            
+            result = OpenStruct.new
 
-            tre_vec = tre_vec.ewise * pixel_to_distance_conversions
+            begin
+            
+              corr = c.correct_position(pos.getEntry(0), pos.getEntry(1))
 
-            result.tre = Vector[*tre_vec].norm
+              result.success = true
 
-            result.tre_xy = Math.hypot(tre_vec[0], tre_vec[1])
+              tre_vec = obj.getVectorDifferenceBetweenChannels(ref_ch, corr_ch).ewise - corr
 
-          rescue UnableToCorrectError => e
+              tre_vec = tre_vec.ewise * pixel_to_distance_conversions
 
-            result.success = false
+              result.tre = Vector[*tre_vec].norm
+
+              result.tre_xy = Math.hypot(tre_vec[0], tre_vec[1])
+
+            rescue UnableToCorrectError => e
+
+              result.success = false
+
+            end
+
+            result
 
           end
-
-          result
 
         end
 
       end
 
-      tre_values = threads.map { |t| t.value }
+      tq.start_queue
+
+      tre_values = tq.finish
 
       tre_values.select! { |e| e.success }
 
