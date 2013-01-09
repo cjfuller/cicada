@@ -30,10 +30,19 @@ require 'cicada/mutable_matrix'
 
 module Cicada
 
+  ##
+  # An error indicating that a position cannot be corrected (probably due to incomplete
+  # coverage in the correction dataset).
   class UnableToCorrectError < StandardError; end
 
+  ##
+  # Stores data for a standard 3d high-resolution colocalization correction, including
+  # positions for a number of objects used for correction, and local quadratic fits of
+  # aberration near these objects.  Can correct 2d positions based upon this data.
+  # 
   class Correction
-
+    
+    # Strings used in XML elements and attributes when writing a correction to an XML format
     XML_STRINGS = { correction_element: "correction",
       correction_point_element: "point", 
       n_points_attr: "n",
@@ -49,10 +58,27 @@ module Cicada
       encoding_attr: "encoding",
       encoding_name: "base64"}
 
+    # Number of parameters used for correction (6, as this is the number of parameters 
+    # for a 2d quadratic fit)
     NUM_CORR_PARAM = 6
 
     attr_accessor :tre, :correction_x, :correction_y, :correction_z, :reference_channel, :correction_channel, :positions_for_correction, :distance_cutoffs
 
+    ##
+    # Constructs a new correction based on the supplied data 
+    #
+    # @param [Array<MVector>] c_x an array of mutable vectors each of which contains the parameters for
+    #  the interpolating function centered at an image object used for correction in the x direction
+    # @param [Array<MVector>] c_y an array of mutable vectors each of which contains the parameters for
+    #  the interpolating function centered at an image object used for correction in the y direction
+    # @param [Array<MVector>] c_z an array of mutable vectors each of which contains the parameters for
+    #  the interpolating function centered at an image object used for correction in the z direction
+    # @param [MVector] distance_cutoffs a mutable vector containing the distance to the farthest point
+    #  used to generate the interpolating function for each image object
+    # @param [Array<ImageObject>] image_objects the image objects used for correction
+    # @param [Integer] reference_channel  the reference channel relative to which others are corrected
+    # @param [Integer] correction_channel the channel being corrected
+    #
     def initialize(c_x, c_y, c_z, distance_cutoffs, image_objects, reference_channel, correction_channel)
 
       @correction_x = c_x
@@ -70,6 +96,13 @@ module Cicada
 
     end
 
+    ##
+    # Writes the correction to a specified file in XML format.
+    # 
+    # @param [String] fn the filename to which to write the correction
+    # 
+    # @return [void]
+    #
     def write_to_file(fn)
       
       File.open(fn) do |f|
@@ -80,6 +113,11 @@ module Cicada
 
     end
 
+    ##
+    # Writes the correction to a string in XML format
+    # 
+    # @return [String] the correction data encoded as XML
+    #
     def write_to_xml
       
       doc = REXML::Document.new
@@ -130,6 +168,13 @@ module Cicada
 
     end
 
+    ##
+    # Reads a correction from a specified file containing an XML-encoded correction.
+    #
+    # @param [String] fn the filename from which to read the correction
+    #
+    # @return [Correction] the correction contained in the file.
+    #
     def self.read_from_file(fn)
 
       return nil unless File.exist?(fn)
@@ -150,7 +195,15 @@ module Cicada
 
     end
 
-
+    ##
+    # Calculates the 2d distances from a specified 2d point to the centroid of each of the image objects
+    # used for the correction.
+    #
+    # @param [Numeric] x the x coordinate of the point
+    # @param [Numeric] y the y coordinate of the point
+    #
+    # @return [Vector] the distance from the specified point to each image object.
+    #
     def calculate_normalized_dists_to_centroids(x,y)
 
       dists_to_centroids = @positions_for_correction.column[0].map { |x0| (x0-x)**2 }
@@ -163,7 +216,13 @@ module Cicada
 
     end
 
-
+    ##
+    # Calculates the weight of each local quadratic fit for correcting a specified point.
+    #
+    # @param (see #calculate_normalized_dists_to_centroids)
+    #
+    # @return [Vector] the weights for each local fit used for correction
+    #
     def calculate_weights(x, y) 
 
       dist_ratio = calculate_normalized_dists_to_centroids(x,y)
@@ -178,7 +237,16 @@ module Cicada
 
     end
 
-    
+    ##
+    # Selects the local fits and their associated image objects that are to be used for correcting
+    # a specified point (i.e. those fits with nonzero weight).
+    #
+    # @param (see #calculate_normalized_dists_to_centroids)
+    #
+    # @return [OpenStruct, #cx, #cy, #cz, #x_vec, #y_vec, #weights] an OpenStruct containing the
+    #  selected fits for the x dimension, y dimension, and z dimension; the x and y positions 
+    #  of the selected image objects used for correction; and the weights of the fits
+    #
     def find_points_for_correction(x,y)
       
       weights = calculate_weights(x,y)
@@ -226,7 +294,14 @@ module Cicada
 
     end
 
-
+    ##
+    # Calculates the correction for a specified position.
+    #
+    # @param (see #calculate_normalized_dists_to_centroids)
+    #
+    # @return [MVector] a mutable vector containing the correction in the x, y, and z dimensions
+    #  for the specified position.
+    # 
     def correct_position(x, y)
  
       points = find_points_for_correction(x,y)
