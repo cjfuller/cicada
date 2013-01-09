@@ -108,13 +108,16 @@ module Cicada
       File.expand_path(p[:basename_set].split(MULTI_NAME_SEP)[0] + POS_XML_EXTENSION, dir)
     end
 
+    def self.in_situ_corr_data_filename(p)
+      dir = [:data_directory]
+      File.expand_path(p[:in_situ_aberr_corr_basename_set].split(MULTI_NAME_SEP)[0] + POS_XML_EXTENSION, dir)
+    end
+
     def self.position_file_exists?(p)
       File.exist?(FileInteraction.position_data_filename(p))
     end
 
-    def self.read_position_data(p)
-      
-      fn = FileInteraction.position_data_filename(p)
+    def self.unserialize_position_data_file(fn)
 
       data_str = nil
 
@@ -123,6 +126,22 @@ module Cicada
       end
 
       Serialization.unserialize_image_objects(data_str)
+
+    end
+
+    def self.read_position_data(p)
+      
+      fn = FileInteraction.position_data_filename(p)
+
+      FileInteraction.unserialize_position_data_file(fn)
+
+    end
+
+    def self.read_in_situ_corr_data(p)
+
+      fn = FileInteraction.in_situ_corr_data_filename(p)
+
+      FileInteraction.unserialize_position_data_file(fn)
 
     end
 
