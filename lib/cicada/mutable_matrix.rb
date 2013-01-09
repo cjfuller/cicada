@@ -26,26 +26,57 @@
 
 require 'matrix'
 
+##
+# Extension to the standard library Matrix class making them mutable.
+#
 class MMatrix < Matrix
 
   public :[]=
 
 end
 
+##
+# Extension to the standard library Vector class making them mutable and adding 
+# some additional functionality.
+#
 class MVector < Vector
 
+  ##
+  # Generates a zero vector of specified size.
+  #
+  # @param [Integer] size the size of the zero vector
+  #
+  # @return [MVector] a mutable vector of specified size containing all 0.0
+  #
   def MVector.zero(size)
 
     MVector.elements(Array.new(size, 0.0), false)
 
   end
 
+  ##
+  # Generates a unit vector of specified size.
+  #
+  # @param [Integer] size the size of the unit vector
+  # 
+  # @return [MVector] a mutable vector of specified size containing all 1.0
+  #
   def MVector.unit(size)
 
     MVector.elements(Array.new(size, 1.0), false)
 
   end
 
+  ##
+  # Replaces the contents of this vector with the contents of another vector.  This will not
+  # change the size of the current vector and will replace entries only up to the current size.
+  #
+  # @param [Vector<Numeric>, Array<Numeric>] other a vector (or array, or other indexable 
+  #  collection) with at least as many elements as this vector; its entries will replace
+  #  this vector's entries
+  #
+  # @return [void]
+  #
   def replace(other)
 
     self.each_index do |i|
