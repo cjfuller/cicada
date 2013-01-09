@@ -48,14 +48,15 @@ java_import Java::edu.stanford.cfuller.imageanalysistools.fitting.ImageObject
 module Cicada
 
 
-
   ##
   # This class is the main entry point for running 3D high-resolution colocalization and CICADA.
   #
   class Cicada
 
+    # parameters required by the methods in this class
     REQUIRED_PARAMETERS = [:dirname, :basename, :im_border_size, :half_z_size, :determine_correction, :pixelsize_nm, :z_sectionsize_nm]
 
+    # parmeters used but not required in this class or only required for optional functionality
     OPTIONAL_PARAMETERS = [:precomputed_position_data, :max_threads, :darkcurrent_image, :residual_cutoff, :max_greylevel_cutoff, :distance_cutoff, :fit_error_cutoff, :determine_correction, :determine_tre, :output_positions_to_directory, :in_situ_aberr_corr_basename, :in_situ_aberr_corr_channel, :log_to_file, :log_detailed_messages]
 
     attr_accessor :parameters, :failures, :logger
