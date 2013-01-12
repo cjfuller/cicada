@@ -37,12 +37,20 @@ require 'logger'
 require 'rimageanalysistools'
 require 'rimageanalysistools/thread_queue'
 require 'rimageanalysistools/image_shortcuts'
+require 'rimageanalysistools/create_parameters'
 
 require 'facets/math/sum'
 
+require 'edu/stanford/cfuller/imageanalysistools/resources/common_methods'
+
 java_import Java::edu.stanford.cfuller.imageanalysistools.filter.ImageSubtractionFilter
 java_import Java::edu.stanford.cfuller.imageanalysistools.image.Histogram
-java_import Java::edu.stanford.cfuller.imageanalysistools.fitting.ImageObject
+java_import Java::edu.stanford.cfuller.imageanalysistools.fitting.GaussianImageObject
+java_import Java::edu.stanford.cfuller.imageanalysistools.meta.parameters.ParameterDictionary
+
+java_import Java::java.util.concurrent.Executors
+
+
 
 
 module Cicada
@@ -53,8 +61,10 @@ module Cicada
   #
   class Cicada
 
+    include IATScripting #TODO: find a better way to get at these methods.
+
     # parameters required by the methods in this class
-    REQUIRED_PARAMETERS = [:dirname, :basename, :im_border_size, :half_z_size, :determine_correction, :pixelsize_nm, :z_sectionsize_nm]
+    REQUIRED_PARAMETERS = [:dirname, :basename, :im_border_size, :half_z_size, :determine_correction, :pixelsize_nm, :z_sectionsize_nm, :num_wavelengths, :photons_per_greylevel]
 
     # parmeters used but not required in this class or only required for optional functionality
     OPTIONAL_PARAMETERS = [:precomputed_position_data, :max_threads, :darkcurrent_image, :residual_cutoff, :max_greylevel_cutoff, :distance_cutoff, :fit_error_cutoff, :determine_correction, :determine_tre, :output_positions_to_directory, :in_situ_aberr_corr_basename, :in_situ_aberr_corr_channel, :log_to_file, :log_detailed_messages]
@@ -70,6 +80,8 @@ module Cicada
     def initialize(p)
       
       @parameters = p
+
+      @parameters = RImageAnalysisTools.create_parameter_dictionary(p) unless @parameters.is_a? ParameterDictionary
 
       @failures = {r2: 0, edge: 0, sat: 0, sep: 0, err: 0}
 
@@ -133,6 +145,26 @@ module Cicada
     end
 
     ##
+    # Submits a single object to a thread queue for fitting.
+    # 
+    # @param [ImageObject] obj the image object to fit
+    # @param [ExecutorService] queue the thread queue
+    # 
+    # @return [void]
+    #
+    def submit_single_object(obj, queue)
+
+      queue.submit do 
+        
+          @logger.debug { "Processing object #{obj.getLabel}: #{obj.object_id}" }
+
+          obj.fitPosition(@parameters)
+
+      end
+
+    end
+
+    ##
     # Fits all the image objects in a single supplied image.
     #
     # Does not check whether the fitting was successful.
@@ -157,35 +189,37 @@ module Cicada
 
       h = Histogram.new(im_set.mask)
 
-      thread_queue = RImageAnalysisTools::ThreadQueue.new
+      max_threads = 1
 
       if @parameters[:max_threads] then
-        thread_queue.max_therads = @parameters[:max_threads]
+        max_threads = @parameters[:max_threads].to_i
       end
+
+      thread_queue = Executors.newFixedThreadPool(max_threads)
 
       0.upto(h.getMaxValue) do |i|
 
-        obj = GaussianImageObject.new(i, image_shallow_copy(im_set.mask), image_shallow_copy(im_set.image), @parameters)
+        obj = GaussianImageObject.new(i, image_shallow_copy(im_set.mask), image_shallow_copy(im_set.image), ParameterDictionary.new(@parameters))
 
         obj.setImageID(im_set.image_fn)
 
         objs << obj
 
-        thread_queue.enqueue do
+      end
 
-          @logger.debug { "Processing object #{i}" }
+      objs.each do |obj|
 
-          obj.fitPosition(@parameters)
-
-        end
+        submit_single_object(obj, thread_queue)
 
       end
 
+      thread_queue.shutdown
 
-      thread_queue.finish
+      until thread_queue.isTerminated do
+        sleep 0.4
+      end
 
       objs
-
 
     end
 
@@ -421,11 +455,11 @@ module Cicada
 
       if @parameters[:log_detailed_messages] then
         
-        @logger.sev_threshold = Logger::INFO
+        @logger.sev_threshold = Logger::DEBUG
 
       else
 
-        @logger.sev_threshold = Logger::DEBUG
+        @logger.sev_threshold = Logger::INFO
 
       end
 

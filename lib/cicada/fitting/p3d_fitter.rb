@@ -22,6 +22,11 @@
 #  * 
 #  * ***** END LICENSE BLOCK ***** */
 
+require 'rimageanalysistools'
+
+require 'facets/math/mean'
+require 'facets/math/std'
+
 module Cicada
 
   ##
@@ -143,7 +148,9 @@ module Cicada
     # @return [Float] the negative log-likelihood of the data.
     #
     def evaluate(point)
-      
+
+      point = point.toArray unless point.is_a? Array
+
       m = point[0]
       s = point[1]
       s = @s unless @should_fit_s
@@ -152,7 +159,7 @@ module Cicada
 
       r.reduce(0.0) do |sum, ri|
 
-        temp_neg_log_p = -1.0*Math.log( p3d(r, m, s))
+        temp_neg_log_p = -1.0*Math.log( p3d(ri, m, s))
 
         if (@use_min_prob and temp_neg_log_p > @min_prob) then
           
@@ -201,14 +208,14 @@ module Cicada
 
       nmm = Java::edu.stanford.cfuller.imageanalysistools.fitting.NelderMeadMinimizer.new(tol)
 
-      initial_mean = (diffs.reduce(0.0) { |a, e| a + e })/diffs.length
+      initial_mean = Math.mean(diffs)
 
-      initial_width = Math.sqrt((diffs.reduce(0.0) { |a, e| a + (e - initial_mean)**2 })/diffs.length)
+      initial_width = Math.std(diffs)
 
-      starting_point = Java::org.apache.commons.math3.ArrayRealVector.new(2, 0.0)
+      starting_point = Java::org.apache.commons.math3.linear.ArrayRealVector.new(2, 0.0)
 
-      starting_point.setEntry(0, initialMean)
-      starting_point.setEntry(1, initialWidth)
+      starting_point.setEntry(0, initial_mean)
+      starting_point.setEntry(1, initial_width)
 
       if @parameters[:robust_p3d_fit_cutoff] then
         

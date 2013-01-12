@@ -35,7 +35,7 @@ require 'pqueue'
 require 'facets/enumerable/ewise'
 require 'facets/math/mean'
 
-require 'rimageanalysistools/fitting/biquare_linear_fit'
+require 'rimageanalysistools/fitting/bisquare_linear_fit'
 require 'rimageanalysistools/thread_queue'
 
 module Cicada
@@ -99,26 +99,45 @@ module Cicada
         obj_pos = obj.getPositionForChannel(ref_ch)
         
         distances_to_objects = iobjs.map { |obj2| obj2.getPositionForChannel(ref_ch).subtract(obj_pos).getNorm }
-        
+               
         pq = PQueue.new
 
-        0.upto(@parameters[:num_points].to_i) do |i|
+        np = @parameters[:num_points].to_i
 
-          pq.push(distances_to_objects[i])
+        distances_to_objects.each do |d|
 
-        end
+          if pq.size < np + 1 then
 
-        (@parameters[:num_points].to_i + 1).upto(distances_to_objects.size - 1) do |i|
+            pq.push d
 
-          if distances_to_objects[i] < pq.top then
+          elsif d < pq.top then
 
             pq.pop
-
-            pq.push(distances_to_objects[i])
+            pq.push d
 
           end
 
         end
+
+        # 0.upto(@parameters[:num_points].to_i) do |i|
+
+        #   pq.push(distances_to_objects[i])
+
+        # end
+
+        # (@parameters[:num_points].to_i + 1).upto(distances_to_objects.size - 1) do |i|
+
+        #   if distances_to_objects[i] < pq.top then
+
+        #     pq.pop
+
+        #     pq.push(distances_to_objects[i])
+
+        #   end
+
+        # end
+
+        
 
         first_exclude = pq.pop
 
@@ -132,18 +151,23 @@ module Cicada
                 
         objs_to_fit = iobjs.values_at(*objs_ind_to_fit)
 
-        diffs_to_fit = MMatrix[objs_to_fit.map { |e| e.getVectorDifferencesBetweenChannels(ref_ch, corr_ch) }]
-        x = Vector[objs_to_fit.map { |e| e.getPositionForChannel(ref_ch).getEntry(0) }]
-        y = Vector[objs_to_fit.map { |e| e.getPositionForChannel(ref_ch).getEntry(1) }]
+        diffs_to_fit = MMatrix[*objs_to_fit.map { |e| e.getVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray }]
+        x = Vector[*objs_to_fit.map { |e| e.getPositionForChannel(ref_ch).getEntry(0) }]
+        y = Vector[*objs_to_fit.map { |e| e.getPositionForChannel(ref_ch).getEntry(1) }]
         
-        correction_parameters = Matrix.columns([MVector.unit(iobjs.size), x, y, x.map { |e| e**2 }, y.map { |e| e**2 }, x.map2(y) { |ex, ey| ex*ey }])
+        correction_parameters = Matrix.columns([MVector.unit(objs_to_fit.size), x, y, x.map { |e| e**2 }, y.map { |e| e**2 }, x.map2(y) { |ex, ey| ex*ey }])
 
-        corr_param_lup = correction_parameters.lup
+        cpt = correction_parameters.transpose
 
-        correction_x << corr_param_lup.solve(diffs_to_fit.column(0))
-        correction_y << corr_param_lup.solve(diffs_to_fit.column(1))
-        correction_z << corr_param_lup.solve(diffs_to_fit.column(2))
+        cpt_cp = cpt * correction_parameters
+
+        cpt_cp_lup = cpt_cp.lup
+
+        correction_x << cpt_cp_lup.solve(cpt * diffs_to_fit.column(0))
+        correction_y << cpt_cp_lup.solve(cpt * diffs_to_fit.column(1))
+        correction_z << cpt_cp_lup.solve(cpt * diffs_to_fit.column(2))
      
+
       end
 
       Correction.new(correction_x, correction_y, correction_z, distance_cutoffs, iobjs, ref_ch, corr_ch)

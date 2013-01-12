@@ -28,6 +28,8 @@ require 'ostruct'
 require 'base64'
 require 'rexml/document'
 
+require 'rimageanalysistools/get_image'
+
 module Cicada
 
   ##
@@ -54,6 +56,7 @@ module Cicada
 
       doc = REXML::Document.new
 
+
       doc.add_element "root"
 
       image_objects.each do |iobj|
@@ -66,7 +69,7 @@ module Cicada
 
       output = ""
 
-      doc.write(output, 1)
+      doc.write(output, 2)
 
       output
 
@@ -142,6 +145,21 @@ module Cicada
 
     # separator used in the parameter file for multiple files, directories, etc.
     MULTI_NAME_SEP = ","
+
+
+    ##
+    # Loads an image from the specified file.
+    #
+    # @param [String] image_fn the image's filename
+    #
+    # @return [ReadOnlyImage] the image at the specified filename
+    #
+    def self.load_image(image_fn)
+
+      RImageAnalysisTools.get_image(image_fn)
+
+    end
+
 
     ##
     # Gets the filename to which / from which image object positions will be written / 
@@ -282,6 +300,20 @@ module Cicada
     def self.write_position_data(image_objects, p)
 
       fn = position_data_filename(p)
+      
+      write_position_data_file(fn)
+
+    end
+
+    ##
+    # Writes the provided image objects to file to the location specified.
+    #
+    # @param [Enumerable<ImageObject>] image_objects the objects that will be written to file. 
+    # @param [String] fn the filename of the file to which to write the data
+    # 
+    # @return [void]
+    #
+    def self.write_position_data_file(image_objects, fn)
 
       File.open(fn, 'w') do |f|
 

@@ -28,6 +28,8 @@ require 'rexml/document'
 require 'ostruct'
 require 'cicada/mutable_matrix'
 
+require 'facets/enumerable/ewise'
+
 module Cicada
 
   ##
@@ -88,9 +90,11 @@ module Cicada
       @correction_channel = correction_channel
       @distance_cutoffs = distance_cutoffs
 
-      @positions_for_correction = MMatrix.build do |r, c|
+      n_dims = 3
 
-        image_objects[r].getPositionForChannel(reference_chanel)[c]
+      @positions_for_correction = MMatrix.build(image_objects.size, n_dims) do |r, c|
+
+        image_objects[r].getPositionForChannel(reference_channel).toArray[c]
 
       end
 
@@ -105,9 +109,9 @@ module Cicada
     #
     def write_to_file(fn)
       
-      File.open(fn) do |f|
+      File.open(fn, 'w') do |f|
 
-        f.write(write_to_xml)
+        f.puts(write_to_xml)
 
       end
 
@@ -130,25 +134,25 @@ module Cicada
 
       ce.attributes[XML_STRINGS[:corr_channel_attr]] = @correction_channel
       
-      @distance_cutoffs.each_index do |i|
+      @distance_cutoffs.each_with_index do |e, i|
 
         cp = ce.add_element XML_STRINGS[:correction_point_element]
 
-        cp.attributes[XML_STRINGS[:x_pos_attr]]= @positions_for_correction[i][0]
-        cp.attributes[XML_STRINGS[:y_pos_attr]]= @positions_for_correction[i][1]
-        cp.attributes[XML_STRINGS[:z_pos_attr]]= @positions_for_correction[i][2]
+        cp.attributes[XML_STRINGS[:x_pos_attr]]= @positions_for_correction[i,0]
+        cp.attributes[XML_STRINGS[:y_pos_attr]]= @positions_for_correction[i,1]
+        cp.attributes[XML_STRINGS[:z_pos_attr]]= @positions_for_correction[i,2]
 
         xp = cp.add_element XML_STRINGS[:x_param_element]
 
-        xp.text = @correction_x,join(", ")
+        xp.text = @correction_x[i].to_a.join(", ")
 
         yp = cp.add_element XML_STRINGS[:y_param_element]
 
-        yp.text = @correction_y.join(", ")
+        yp.text = @correction_y[i].to_a.join(", ")
 
         zp = cp.add_element XML_STRINGS[:z_param_element]
         
-        zp.text = @correction_z.join(", ")
+        zp.text = @correction_z[i].to_a.join(", ")
         
       end
 
@@ -156,13 +160,13 @@ module Cicada
 
       bd.attributes[XML_STRINGS[:encoding_attr]]= XML_STRINGS[:encoding_name]
 
-      bin_data = Base64.encode(Marshal.dump(self))
+      bin_data = Base64.encode64(Marshal.dump(self))
 
       bd.text = bin_data
 
       doc_string = ""
 
-      doc.write doc_string
+      doc.write doc_string, 2
 
       doc_string
 
@@ -187,13 +191,29 @@ module Cicada
 
       end
 
-      doc = REXML::Document.new xml_str
-
-      bin_el = doc.elements[1, XML_STRINGS[:binary_data_element]]
-
-      Marshal.load(Base64.decode(bd.text))
+      read_from_xml(xml_str)
 
     end
+
+
+    ##
+    # Reads a correction from an XML string.
+    #
+    # @param [String] xml_str the XML string containing the information
+    #
+    # @return [Correction] the correction contained in the string.
+    #
+    def self.read_from_xml(xml_str)
+
+      doc = REXML::Document.new xml_str
+
+      bin_el = doc.root.elements[1, XML_STRINGS[:binary_data_element]]
+
+      Marshal.load(Base64.decode64(bin_el.text))
+
+    end
+
+    
 
     ##
     # Calculates the 2d distances from a specified 2d point to the centroid of each of the image objects
@@ -206,9 +226,9 @@ module Cicada
     #
     def calculate_normalized_dists_to_centroids(x,y)
 
-      dists_to_centroids = @positions_for_correction.column[0].map { |x0| (x0-x)**2 }
+      dists_to_centroids = @positions_for_correction.column(0).map { |x0| (x0-x)**2 }
 
-      dists_to_centroids += @positions_for_correction.column[1].map { |y0| (y0-y)**2 }
+      dists_to_centroids += @positions_for_correction.column(1).map { |y0| (y0-y)**2 }
 
       dists_to_centroids = dists_to_centroids.map { |e| Math.sqrt(e) }
 
@@ -227,9 +247,9 @@ module Cicada
 
       dist_ratio = calculate_normalized_dists_to_centroids(x,y)
 
-      dist_ratio_mask = Vector.zero(dist_ratio.size)
+      dist_ratio_mask = MVector.zero(dist_ratio.size)
 
-      dist_ratio_mask = dist_ratio_mask.map2(dist_ratio) { |e1, e2| e2 <= 1 ? 1 : 0 }
+      dist_ratio_mask = dist_ratio.map { |e| e <= 1 ? 1 : 0 }
 
       weights = dist_ratio.map { |e| -3*e**2 + 1 + 2*e**3 }
 
@@ -253,11 +273,11 @@ module Cicada
 
       count_weights = weights.count { |e| e > 0 }
 
-      raise UnableToCorrectError, "Incomplete coverate in correction dataset at (x,y) = (#{x}, #{y})." if count_weights == 0
+      raise UnableToCorrectError, "Incomplete coverage in correction dataset at (x,y) = (#{x}, #{y})." if count_weights == 0
 
-      cx = MMatrix.zero(count_weights, @correction_x.column_size)
-      cy = MMatrix.zero(count_weights, @correction_y.column_size)
-      cz = MMatrix.zero(count_weights, @correction_z.column_size)
+      cx = MMatrix.zero(count_weights, @correction_x[0].size)
+      cy = MMatrix.zero(count_weights, @correction_y[0].size)
+      cz = MMatrix.zero(count_weights, @correction_z[0].size)
       
       x_vec = MVector.zero(count_weights)
       y_vec = MVector.zero(count_weights)
@@ -270,9 +290,9 @@ module Cicada
 
         if w > 0 then
 
-          cx[kept_counter].replace(@correction_x.row(i))
-          cy[kept_counter].replace(@correction_y.row(i))
-          cz[kept_counter].replace(@correction_z.row(i))
+          cx.replace_row(kept_counter, @correction_x[i])
+          cy.replace_row(kept_counter, @correction_y[i])
+          cz.replace_row(kept_counter, @correction_z[i])
           
           x_vec[kept_counter] = x - positions_for_correction[i,0]
           y_vec[kept_counter] = y - positions_for_correction[i,1]
@@ -306,22 +326,23 @@ module Cicada
  
       points = find_points_for_correction(x,y)
 
-      x_corr = 0
-      y_corr = 0
-      z_corr = 0
+      x_corr = 0.0
+      y_corr = 0.0
+      z_corr = 0.0
 
-      all_correction_parameters = MMatrix.columns([MVector.unit(count_weights), 
+      all_correction_parameters = MMatrix.columns([MVector.unit(points.x_vec.size), 
                                                   points.x_vec, 
                                                   points.y_vec, 
                                                   points.x_vec.map { |e| e**2 }, 
                                                   points.y_vec.map { |e| e**2 }, 
-                                                  points.x_vec.map2(y_vec) { |e1, e2| e1*e2 }])
+                                                  points.x_vec.map2(points.y_vec) { |e1, e2| e1*e2 }])
 
-      count_weights.times do |i|
+ 
+      all_correction_parameters.row_size.times do |i|
 
         x_corr += all_correction_parameters.row(i).inner_product(points.cx.row(i))*points.weights[i]
         y_corr += all_correction_parameters.row(i).inner_product(points.cy.row(i))*points.weights[i]
-        z_corr += all_correction_parameters.row(i).inner_product(points.cz_mat.row(i))*points.weights[i]
+        z_corr += all_correction_parameters.row(i).inner_product(points.cz.row(i))*points.weights[i]
 
       end
 

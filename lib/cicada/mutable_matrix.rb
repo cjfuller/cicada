@@ -31,6 +31,40 @@ require 'matrix'
 #
 class MMatrix < Matrix
 
+  ##
+  # Replaces a row in this matrix by copying the entries from another vector.
+  # 
+  # @param [Integer] i the index of the row to replace
+  # @param [Vector, Array] other the vector or array whose contents will be copied
+  #  to the specified row.
+  #
+  def replace_row(i, other)
+
+    column_size.times do |j|
+
+      self[i, j]= other[j]
+
+    end
+
+  end
+
+  ##
+  # Replaces a column in this matrix by copying the entries from another vector.
+  # 
+  # @param [Integer] j the index of the column to replace
+  # @param [Vector, Array] other the vector or array whose contents will be copied
+  #  to the specified column.
+  #
+  def replace_column(j, other)
+
+    row_size.times do |i|
+
+      self[i, j]= other[i]
+
+    end
+
+  end
+  
   public :[]=
 
 end
@@ -79,7 +113,7 @@ class MVector < Vector
   #
   def replace(other)
 
-    self.each_index do |i|
+    self.each_with_index do |e,i|
 
       self[i] = other[i]
     
