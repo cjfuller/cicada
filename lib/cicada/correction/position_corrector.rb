@@ -38,6 +38,8 @@ require 'facets/math/mean'
 require 'rimageanalysistools/fitting/bisquare_linear_fit'
 require 'rimageanalysistools/thread_queue'
 
+java_import Java::org.apache.commons.math3.linear.ArrayRealVector
+
 module Cicada
 
   ##
@@ -67,6 +69,30 @@ module Cicada
       @parameters = p
       @pixel_to_distance_conversions = Vector[p[:pixelsize_nm], p[:pixelsize_nm], p[:z_sectionsize_nm]]
     end
+
+
+    ##
+    # Creates a RealVector (org.apache.commons.math3.linear.RealVector) that is a copy of
+    # the contents of the supplied vector.
+    #
+    # @param [Vector] vec the Vector to convert
+    #
+    # @return [RealVector] the commons math RealVector containing the same elements
+    #
+    def self.convert_to_realvector(vec)
+
+      conv = ArrayRealVector.new(vec.size, 0.0)
+
+      vec.each_with_index do |e, i|
+
+        conv.setEntry(i, e)
+
+      end
+
+      conv
+
+    end
+
 
     ##
     # Generates a correction from a specified array of image objects.
@@ -100,24 +126,37 @@ module Cicada
         
         distances_to_objects = iobjs.map { |obj2| obj2.getPositionForChannel(ref_ch).subtract(obj_pos).getNorm }
                
-        pq = PQueue.new
+        # pq = PQueue.new
 
-        np = @parameters[:num_points].to_i
+        # np = @parameters[:num_points].to_i
 
-        distances_to_objects.each do |d|
+        # distances_to_objects.each do |d|
 
-          if pq.size < np + 1 then
+        #   if pq.size < np + 1 then
 
-            pq.push d
+        #     pq.push d
 
-          elsif d < pq.top then
+        #   elsif d < pq.top then
 
-            pq.pop
-            pq.push d
+        #     pq.pop
+        #     pq.push d
 
-          end
+        #   end
 
-        end
+        # end
+
+
+        pq = distances_to_objects.sort
+
+        index = @parameters[:num_points].to_i
+
+       
+        first_exclude = pq[index]
+
+        last_dist = pq[index-1]
+
+
+#######
 
         # 0.upto(@parameters[:num_points].to_i) do |i|
 
@@ -139,9 +178,9 @@ module Cicada
 
         
 
-        first_exclude = pq.pop
+       # first_exclude = pq.pop
 
-        last_dist = pq.pop
+       # last_dist = pq.pop
 
         distance_cutoff = (last_dist + first_exclude)/2.0
 
@@ -152,9 +191,12 @@ module Cicada
         objs_to_fit = iobjs.values_at(*objs_ind_to_fit)
 
         diffs_to_fit = MMatrix[*objs_to_fit.map { |e| e.getVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray }]
-        x = Vector[*objs_to_fit.map { |e| e.getPositionForChannel(ref_ch).getEntry(0) }]
-        y = Vector[*objs_to_fit.map { |e| e.getPositionForChannel(ref_ch).getEntry(1) }]
+        x_to_fit = objs_to_fit.map { |e| e.getPositionForChannel(ref_ch).getEntry(0) }
+        y_to_fit = objs_to_fit.map { |e| e.getPositionForChannel(ref_ch).getEntry(1) }
         
+        x = Vector[*x_to_fit.map { |e| e - obj_pos.getEntry(0) }]
+        y = Vector[*y_to_fit.map { |e| e - obj_pos.getEntry(1) }]
+
         correction_parameters = Matrix.columns([MVector.unit(objs_to_fit.size), x, y, x.map { |e| e**2 }, y.map { |e| e**2 }, x.map2(y) { |ex, ey| ex*ey }])
 
         cpt = correction_parameters.transpose
@@ -175,6 +217,20 @@ module Cicada
     end
 
     ##
+    # Changes the scale of a vector from image units to physical distances using distance specified
+    # in the analysis parameters.
+    #
+    # @param [Vector] vec the vector to scale
+    # 
+    # @return [Vector] the vector scaled to physical units (by parameter naming convention, in nm)
+    #
+    def apply_scale(vec)
+
+      vec.map2(@pixel_to_distance_conversions) { |e1, e2| e1*e2 }
+
+    end
+
+    ##
     # Corrects an array of image objects using the provided correction.
     #
     # @param [Correction] c the correction to be used
@@ -188,7 +244,9 @@ module Cicada
       ref_ch = @parameters[:reference_channel].to_i
       corr_ch = @parameters[:channel_to_correct].to_i
 
-      vec_diffs = iobjs.map { |e| e.getScalarDifferenceBetweenChannels(ref_ch, corr_ch) }
+      vec_diffs = iobjs.map { |e| e.getVectorDifferenceBetweenChannels(ref_ch, corr_ch) }
+
+      vec_diffs.map! { |e| apply_scale(Vector[*e.toArray]) }
 
       corrected_vec_diffs = []
 
@@ -210,19 +268,25 @@ module Cicada
 
         end
 
-      end 
+        corrected_vec_diffs.map! { |e| apply_scale(e) }
+
+      else 
+
+        corrected_vec_diffs = vec_diffs
+        
+      end
       
       print_distance_components(vec_diffs, corrected_vec_diffs)
 
-      corrected_vec_diffs.map { |e| Vector[*e].norm  } 
+      corrected_vec_diffs.map { |e| e.norm  } 
 
     end
 
     ##
     # Prints the mean scalar and vector differences both corrected and uncorrected.
     #
-    # @param [Array< Array<Numeric> >] vec_diffs an array of the uncorrected vector differences
-    # @param [Array< Array<Numeric> >] corrected_vec_diffs an array of the corrected vector differences
+    # @param [Array<Vector>] vec_diffs an array of the uncorrected vector differences
+    # @param [Array<Vector>] corrected_vec_diffs an array of the corrected vector differences
     #
     # @return [void]
     #
@@ -232,7 +296,7 @@ module Cicada
 
       vec_diffs.each do |e|
 
-        mean_uncorr_vec = mean_uncorr_vec.ewise + e
+        mean_uncorr_vec = mean_uncorr_vec.ewise + e.to_a
 
       end
 
@@ -240,9 +304,13 @@ module Cicada
 
       corrected_vec_diffs.each do |e|
 
-        mean_corr_vec = mean_corr_vec.ewise + e
+        mean_corr_vec = mean_corr_vec.ewise + e.to_a
 
       end
+
+      mean_uncorr_vec.map! { |e| e / vec_diffs.length }
+
+      mean_corr_vec.map! { |e| e / corrected_vec_diffs.length }
 
       #TODO - logging
 
@@ -261,7 +329,7 @@ module Cicada
     # @param [Integer] ref_ch the reference channel relative to which the other will be corrected
     # @param [Integer] corr_ch the channel being corrected
     #
-    # @return [Array<Numeric>] the corrected (x,y,z) vector difference between the two channels
+    # @return [Vector] the corrected (x,y,z) vector difference between the two channels
     #
     def correct_single_object(c, iobj, ref_ch, corr_ch)
       
@@ -273,9 +341,9 @@ module Cicada
 
       end
 
-      iobj.applyCorrectionVectorToChannel(corr_ch, corr)
+      iobj.applyCorrectionVectorToChannel(corr_ch, PositionCorrector.convert_to_realvector(corr))
       
-      iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray
+      Vector.elements(iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray)
 
     end
 
@@ -375,7 +443,7 @@ module Cicada
 
             c = generate_correction(temp_objs)
 
-            pos = obj,getPositionForChannel(ref_ch)
+            pos = obj.getPositionForChannel(ref_ch)
             
             result = OpenStruct.new
 
@@ -385,11 +453,11 @@ module Cicada
 
               result.success = true
 
-              tre_vec = obj.getVectorDifferenceBetweenChannels(ref_ch, corr_ch).ewise - corr
+              tre_vec = Vector[*obj.getVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray] - corr
 
-              tre_vec = tre_vec.ewise * pixel_to_distance_conversions
+              tre_vec = tre_vec.map2(@pixel_to_distance_conversions) { |e1, e2| e1*e2 }
 
-              result.tre = Vector[*tre_vec].norm
+              result.tre = tre_vec.norm
 
               result.tre_xy = Math.hypot(tre_vec[0], tre_vec[1])
 

@@ -121,6 +121,7 @@ class MVector < Vector
 
   end
 
+
   public :[]=
 
 

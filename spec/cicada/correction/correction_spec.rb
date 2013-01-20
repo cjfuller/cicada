@@ -26,12 +26,9 @@
 
 require 'cicada/correction/correction'
 
+require 'spec_helper'
+
 describe Cicada::Correction do
-
-  CORR_IMAGE = "./spec/resources/beads_sim.ome.tif"
-  CORR_MASK = "./spec/resources/beads_sim_mask.ome.tif"
-
-  CORR_FN = "./spec/resources/sim_correction.xml"
 
   XY_SIZE_NM = 80.0
   Z_SIZE_NM = 100.0
@@ -69,8 +66,13 @@ describe Cicada::Correction do
     x = [99.75, 20.0, 122.0, 37.98, 200.0, 223.44]
     y = [54.75, 90.0, 220.0, 77.43, 189.0, 120.30]
 
-    #reasonable values given a < 10 nm TRE; not theory, just here to test for regression
-    expected_error = [1.145, 7.154, 14.156, 5.825, 9.809, 4.116] 
+    expected_error = [1.671, 
+                      1.103,
+                      0.459,
+                      1.286,
+                      1.243,
+                      2.385] #values based on java implementation
+
 
     allowed_error = 0.001
 

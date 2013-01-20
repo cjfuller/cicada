@@ -28,6 +28,7 @@ require 'ostruct'
 require 'base64'
 require 'rexml/document'
 
+require 'rimageanalysistools'
 require 'rimageanalysistools/get_image'
 
 module Cicada
@@ -63,6 +64,8 @@ module Cicada
 
         in_doc = REXML::Document.new iobj.writeToXMLString
 
+        in_doc.root.elements[1, "serialized_form"].text = Base64.encode64(Marshal.dump(iobj))
+
         doc.root.add in_doc.elements[1,"image_object"]
 
       end
@@ -86,11 +89,13 @@ module Cicada
     #
     def self.image_object_from_bytes(bin_data)
 
-      j_bytes = enc_bin_data.to_java_bytes
+      Marshal.load(bin_data)
 
-      oi = Java::java.io.ObjectInputStream.new(Java::java.io.ByteArrayInputStream.new(j_bytes))
+      #j_bytes = bin_data.to_java_bytes
 
-      oi.readObject
+      #oi = Java::java.io.ObjectInputStream.new(Java::java.io.ByteArrayInputStream.new(j_bytes))
+
+      #oi.readObject
 
     end
 
