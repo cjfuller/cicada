@@ -34,4 +34,7 @@ OBJ_FN = "./spec/resources/beads_sim_data.xml"
 
 CORR_FN = "./spec/resources/sim_correction.xml"
 
+EXP_IMAGE = "./spec/resources/expt_sim.ome.tif"
+
+EXP_MASK = "./spec/resources/expt_sim_mask.ome.tif"
 

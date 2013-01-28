@@ -122,6 +122,63 @@ describe Cicada::PositionCorrector do
 
   end
 
+  it "should be able to calculate coefficients for the in situ correction" do
+
+    @p[:correct_images] = false
+    @p[:channel_to_correct] = 2
+    @p[:in_situ_aberr_corr_channel] = 1
+
+    pc = Cicada::PositionCorrector.new(@p)
+
+    corr = pc.generate_in_situ_correction_from_iobjs(load_iobjs)
+
+    x_corr = corr[0]
+    y_corr = corr[1]
+    z_corr = corr[2]
+
+    #these values match the java implementation; input values for image generation (pre-noise) were 1.32 slope and 0.05625 x,y intercept and 0.1125 z intercept
+    expected_x = [1.28, 0.057]
+    expected_y = [1.15, 0.058]
+    expected_z = [1.32, 0.119]
+
+    allowed_err = [0.01, 0.001]
+
+    (expected_x[0] - x_corr[0]).abs.should be < allowed_err[0]
+    (expected_x[1] - x_corr[1]).abs.should be < allowed_err[1]
+    (expected_y[0] - y_corr[0]).abs.should be < allowed_err[0]
+    (expected_y[1] - y_corr[1]).abs.should be < allowed_err[1]
+    (expected_z[0] - z_corr[0]).abs.should be < allowed_err[0]
+    (expected_z[1] - z_corr[1]).abs.should be < allowed_err[1]
+
+  end
+
+  
+  it "should be able to apply the in situ correction" do 
+    
+    @p[:correct_images] = false
+    @p[:channel_to_correct] = 2
+    @p[:in_situ_aberr_corr_channel] = 1
+
+    pc = Cicada::PositionCorrector.new(@p)
+
+    corr = pc.generate_in_situ_correction_from_iobjs(load_iobjs)
+
+    corrected = pc.apply_in_situ_correction(load_iobjs, corr)
+
+    corrected.map! { |c| pc.apply_scale(c) }
+
+    averages = [0, 0, 0]
+
+    averages = corrected.reduce(averages) { |a, e| a.ewise + e.to_a }
+
+    averages.map! { |e| e/corrected.length }
+
+    Vector[*averages].norm.should be < 0.5
+
+  end
+    
+  
+
 
 end
 

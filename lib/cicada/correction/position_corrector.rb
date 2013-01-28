@@ -52,7 +52,7 @@ module Cicada
     REQUIRED_PARAMETERS = [:pixelsize_nm, :z_sectionsize_nm, :num_points, :reference_channel, :channel_to_correct]
 
     # parmeters used but not required in this class or only required for optional functionality
-    OPTIONAL_PARAMETERS = [:determine_correction, :max_threads, :in_situ_aberr_corr_channel, :inverted_z_axis, :distable_in_situ_corr_constant_offset]
+    OPTIONAL_PARAMETERS = [:determine_correction, :max_threads, :in_situ_aberr_corr_channel, :inverted_z_axis, :disable_in_situ_corr_constant_offset]
 
     # Number of parameters used for correction (6, as this is the number of parameters 
     # for a 2d quadratic fit)
@@ -350,20 +350,34 @@ module Cicada
     ##
     # Generates an in situ aberration correction (using the data specified in a parameter file)
     #
+    # @return @see #generate_in_situ_correction_from_iobjs
+    #
+    def generate_in_situ_correction
+      
+      iobjs_for_in_situ_corr = FileInteraction.read_in_situ_corr_data(@parameters)
+
+      generate_in_situ_correction_from_iobjs(iobjs_for_in_situ_corr)
+
+    end
+
+    ##
+    # Generates an in situ aberration correction from the supplied image objects.
+    #
+    # @param [Array<ImageObject>] an array containing the image objects from which the in situ
+    #  correction will be generated
+    #
     # @return [Array< Array<Numeric> >] an array containing the x, y, and z corrections; each
     #  correction is a 2-element array containing the slope and intercept for the fit in each
     #  dimension.  The intercept will be zero if disabled in the parameter file.
     #
-    def generate_in_situ_correction
-      
+    def generate_in_situ_correction_from_iobjs(iobjs_for_in_situ_corr)
+
       ref_ch = @parameters[:reference_channel].to_i
       corr_ch = @parameters[:channel_to_correct].to_i
       cicada_ch = @parameters[:in_situ_aberr_corr_channel]
 
-      iobjs_for_in_situ_corr = FileInteraction.read_in_situ_corr_data(@parameters)
-
-      corr_diffs = Matrix.rows(iobjs_for_in_situ_corr.map { |iobj| iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, cicada_ch) })
-      expt_diffs = Matrix.rows(iobjs_for_in_situ_corr.map { |iobj| iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch) })
+      corr_diffs = Matrix.rows(iobjs_for_in_situ_corr.map { |iobj| iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, cicada_ch).toArray })
+      expt_diffs = Matrix.rows(iobjs_for_in_situ_corr.map { |iobj| iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray })
 
       bslf = BisquareLinearFit.new
 
@@ -399,12 +413,12 @@ module Cicada
 
       corrected_differences = iobjs.map do |iobj|
         
-        corr_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, cicada_ch).toArray
-        expt_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray
+        corr_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, cicada_ch).toArray.to_a
+        expt_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray.to_a
 
         correction = (corr_diff.ewise * corr_params[0]).ewise + corr_params[1]
 
-        expt_diff.ewise - correction
+        Vector.elements(expt_diff.ewise - correction, false)
 
       end
 
