@@ -41,21 +41,6 @@ describe Cicada::PositionCorrector do
 
   end
 
-
-  def load_correction
-
-    Cicada::Correction.read_from_file(CORR_FN)
-
-  end
-
-
-  def load_iobjs
-
-    Cicada::FileInteraction.unserialize_position_data_file(OBJ_FN)
-
-  end
-
-
   it "should generate a correction correctly" do
 
     pc = Cicada::PositionCorrector.new(@p)

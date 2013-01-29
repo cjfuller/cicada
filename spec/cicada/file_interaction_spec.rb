@@ -24,27 +24,37 @@
 #  * ***** END LICENSE BLOCK ***** */
 #++
 
-#resource locations for test data
+require 'cicada/file_interaction'
 
-CORR_IMAGE = "./spec/resources/beads_sim.ome.tif"
+describe Cicada::Serialization do 
 
-CORR_MASK = "./spec/resources/beads_sim_mask.ome.tif"
+  it "should be able to serialize and unserialize a set of image objects" do
 
-OBJ_FN = "./spec/resources/beads_sim_data.xml"
+    iobjs = load_iobjs
 
-CORR_FN = "./spec/resources/sim_correction.xml"
+    to_ser = iobjs[0,3]
 
-def load_correction
+    ser_str = Cicada::Serialization.serialize_image_objects(to_ser)
 
-  Cicada::Correction.read_from_file(CORR_FN)
+    objs_out = Cicada::Serialization.unserialize_image_objects(ser_str)
+
+    objs_out[0].getPositionForChannel(0).getEntry(0).should == to_ser[0].getPositionForChannel(0).getEntry(0)
+
+    objs_out[1].getPositionForChannel(0).getEntry(0).should == to_ser[1].getPositionForChannel(0).getEntry(0)
+
+    objs_out[2].getPositionForChannel(0).getEntry(0).should == to_ser[2].getPositionForChannel(0).getEntry(0)
+
+    objs_out[0].nil?.should be false
+
+    objs_out[1].nil?.should be false
+
+    objs_out[2].nil?.should be false
+
+  end
+
+
 
 end
 
-
-def load_iobjs
-
-  Cicada::FileInteraction.unserialize_position_data_file(OBJ_FN)
-
-end
 
 
