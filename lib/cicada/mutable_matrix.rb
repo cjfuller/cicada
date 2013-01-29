@@ -29,8 +29,12 @@ require 'matrix'
 ##
 # Extension to the standard library Matrix class making them mutable.
 #
-class MMatrix < Matrix
+#class MMatrix < Matrix #disabled until the bug fix for the issue in the standard library that prevents useful subclasses is released
 
+class MMatrix < Matrix
+end
+
+class Matrix 
   ##
   # Replaces a row in this matrix by copying the entries from another vector.
   # 
@@ -84,7 +88,7 @@ class MVector < Vector
   #
   def MVector.zero(size)
 
-    MVector.elements(Array.new(size, 0.0), false)
+    elements(Array.new(size, 0.0), false)
 
   end
 
