@@ -126,61 +126,29 @@ module Cicada
         
         distances_to_objects = iobjs.map { |obj2| obj2.getPositionForChannel(ref_ch).subtract(obj_pos).getNorm }
                
-        # pq = PQueue.new
+        pq = PQueue.new
 
-        # np = @parameters[:num_points].to_i
+        np = @parameters[:num_points].to_i
 
-        # distances_to_objects.each do |d|
+        distances_to_objects.each do |d|
 
-        #   if pq.size < np + 1 then
+          if pq.size < np + 1 then
 
-        #     pq.push d
+            pq.push d
 
-        #   elsif d < pq.top then
+          elsif d < pq.top then
 
-        #     pq.pop
-        #     pq.push d
+            pq.pop
+            pq.push d
 
-        #   end
+          end
 
-        # end
-
-
-        pq = distances_to_objects.sort
-
-        index = @parameters[:num_points].to_i
-
-       
-        first_exclude = pq[index]
-
-        last_dist = pq[index-1]
+        end
 
 
-#######
+        first_exclude = pq.pop
 
-        # 0.upto(@parameters[:num_points].to_i) do |i|
-
-        #   pq.push(distances_to_objects[i])
-
-        # end
-
-        # (@parameters[:num_points].to_i + 1).upto(distances_to_objects.size - 1) do |i|
-
-        #   if distances_to_objects[i] < pq.top then
-
-        #     pq.pop
-
-        #     pq.push(distances_to_objects[i])
-
-        #   end
-
-        # end
-
-        
-
-       # first_exclude = pq.pop
-
-       # last_dist = pq.pop
+        last_dist = pq.pop
 
         distance_cutoff = (last_dist + first_exclude)/2.0
 
