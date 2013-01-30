@@ -18,7 +18,7 @@ The gem will install an executable called cicada.  To run:
 
 API documentation is available [here](http://rdoc.info/gems/cicada).
 
-Documentation for the parameter files, including which parameters are required and their meanings, can be found on the [[wiki|Parameters]].
+Documentation for the parameter files, including which parameters are required and their meanings, can be found on the [wiki](https://github.com/cjfuller/cicada/wiki/Parameters).
 
 #License
 
