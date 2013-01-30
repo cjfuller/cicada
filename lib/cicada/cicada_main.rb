@@ -66,6 +66,8 @@ module Cicada
 
     attr_accessor :parameters, :failures, :logger
 
+    FAILURE_REASONS = {r2: "R^2 value", edge: "Too close to image edge", sat: "Saturated pixels", sep: "Separation between channels too large", err: "Fit error too large"}
+
     ##
     # Sets up the analysis from a parameter dictionary.
     # 
@@ -497,13 +499,32 @@ module Cicada
 
         end
 
-        @logger.info { "fitting failures by type: #{@failures.to_s}" }
+        log_fitting_failures
         
       end
 
       image_objects
 
     end
+
+
+    ##
+    # Formats the fitting failures using their description strings and logs them
+    #
+    # @return [void]
+    #
+    def log_fitting_failures
+
+      @logger.info { "fitting failures by type:" }
+
+      @failures.each_key do |k|
+
+        @logger.info { FAILURE_REASONS[k] + ": " + @failures[k].to_s }
+
+      end
+
+    end
+
 
     ##
     # Runs the analysis.
