@@ -2,7 +2,7 @@
 
 This package is a ruby implementation of Colocalization and In-situ Correction of Aberration for Distance Analysis (CICADA).  (See Fuller and Straight, 2012, doi:10.1111/j.1365-2818.2012.03654.x)
 
-Depends on the [rimageanalysistools package](https://github.com/cjfuller/rimageanalysistools), which in turn depends on the [ImageAnalysisTools java library] (https://cjfuller.github.com/imageanalysistools).  Requires jruby. (Only tested on jruby >=1.7 in ruby 1.9 mode.)
+Depends on the [rimageanalysistools package](https://github.com/cjfuller/rimageanalysistools), which in turn depends on the [ImageAnalysisTools java library] (http://cjfuller.github.com/imageanalysistools/).  Requires jruby. (Only tested on jruby >=1.7 in ruby 1.9 mode.)
 
 #Installing
 
