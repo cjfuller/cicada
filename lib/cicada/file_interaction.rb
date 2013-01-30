@@ -37,7 +37,7 @@ module Cicada
   # Handles the serialization of the ImageObjects for storing them in a file.
   #
   # The serialized output will consist of an XML file describing the objects
-  # in human-readable form and including a binary data section containing the
+  # in human-readable form and including a binary data sectiobn containing the
   # serialized object.  This binary section is the only thing read back in, so
   # changing the XML human-readable portion of the file manually will not affect
   # the data read back in.
@@ -306,7 +306,7 @@ module Cicada
 
       fn = position_data_filename(p)
       
-      write_position_data_file(fn)
+      write_position_data_file(image_objects,fn)
 
     end
 

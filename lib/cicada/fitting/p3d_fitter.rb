@@ -223,7 +223,7 @@ module Cicada
 
       end
 
-      nmm.optimize(of, starting_point).toArray
+      nmm.optimize(of, starting_point).toArray.to_a
 
     end
   

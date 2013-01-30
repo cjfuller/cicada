@@ -24,18 +24,15 @@
 #  * ***** END LICENSE BLOCK ***** */
 #++
 
-$LOAD_PATH << "/home/cfuller/git/cicada/lib"
-$LOAD_PATH << "/home/cfuller/git/rimageanalysistools/lib"
-$LOAD_PATH << "/home/cfuller/git/rimageanalysistools/extlib"
-
 require 'cicada/file_interaction'
 require 'cicada/correction/correction'
+require 'cicada/correction/position_corrector'
+require 'cicada/fitting/p3d_fitter'
 require 'ostruct'
 require 'logger'
 
 
 require 'rimageanalysistools'
-require 'rimageanalysistools/thread_queue'
 require 'rimageanalysistools/image_shortcuts'
 require 'rimageanalysistools/create_parameters'
 
@@ -51,15 +48,13 @@ java_import Java::edu.stanford.cfuller.imageanalysistools.meta.parameters.Parame
 java_import Java::java.util.concurrent.Executors
 
 
-
-
 module Cicada
 
 
   ##
   # This class is the main entry point for running 3D high-resolution colocalization and CICADA.
   #
-  class Cicada
+  class CicadaMain
 
     include IATScripting #TODO: find a better way to get at these methods.
 
@@ -133,6 +128,8 @@ module Cicada
       
       if (@dark_image) then
 
+        im_set.image = im_set.image.writableInstance
+
         isf = ImageSubtractionFilter.new
 
         isf.setSubtractPlanarImage(true)
@@ -156,7 +153,7 @@ module Cicada
 
       queue.submit do 
         
-          @logger.debug { "Processing object #{obj.getLabel}: #{obj.object_id}" }
+          @logger.debug { "Processing object #{obj.getLabel}" }
 
           obj.fitPosition(@parameters)
 
@@ -197,7 +194,7 @@ module Cicada
 
       thread_queue = Executors.newFixedThreadPool(max_threads)
 
-      0.upto(h.getMaxValue) do |i|
+      1.upto(h.getMaxValue) do |i|
 
         obj = GaussianImageObject.new(i, image_shallow_copy(im_set.mask), image_shallow_copy(im_set.image), ParameterDictionary.new(@parameters))
 
@@ -239,7 +236,7 @@ module Cicada
 
       checks = [:check_r2, :check_edges, :check_saturation, :check_separation, :check_error]
 
-      to_check.finishedFitting and checks.all { |c| self.send(c, to_check) }
+      to_check.finishedFitting and checks.all? { |c| self.send(c, to_check) }
 
     end
 
@@ -254,7 +251,7 @@ module Cicada
 
       return true unless @parameters[:residual_cutoff]
 
-      obj.getFitR2ByChannel.each do |r2|
+      to_check.getFitR2ByChannel.each do |r2|
 
         if r2 < @parameters[:residual_cutoff].to_f then
           
@@ -328,12 +325,12 @@ module Cicada
 
         to_check.getParent.each do |ic|
 
-          if getParent[ic] > cutoff then 
+          if to_check.getParent[ic] > cutoff then 
 
             to_check.unboxImages
             @failures[:sat] += 1
 
-            @logger.debug { "check failed for object #{to_check.getLabel} greylevel: #{to_check[ic]}" }
+            @logger.debug { "check failed for object #{to_check.getLabel} greylevel: #{to_check.getParent[ic]}" }
 
             return false 
 
@@ -367,11 +364,11 @@ module Cicada
 
         z_sectionsize_2 = @parameters[:z_sectionsize_nm].to_f**2
 
-        0.upto(size_c) do |ci|
-          0.upto(size_c) do |cj|
+        0.upto(size_c-1) do |ci|
+          0.upto(size_c-1) do |cj|
 
-            fp1 = to_check.getFitParametersByChannel.get(i)
-            fp2 = to_check.getFitParametersByChannel.get(j)
+            fp1 = to_check.getFitParametersByChannel.get(ci)
+            fp2 = to_check.getFitParametersByChannel.get(cj)
 
             ijdist = xy_pixelsize_2 * (fp1.getPosition(ImageCoordinate::X) - fp2.getPosition(ImageCoordinate::X))**2 +
               xy_pixelsize_2 * (fp1.getPosition(ImageCoordinate::Y) - fp2.getPosition(ImageCoordinate::Y))**2 +
@@ -480,7 +477,7 @@ module Cicada
 
         image_objects = []
 
-        to_process = FileInteraction.list_files
+        to_process = FileInteraction.list_files(@parameters)
 
         to_process.each do |im_set|
           
@@ -521,11 +518,13 @@ module Cicada
 
       pc = PositionCorrector.new(@parameters)
 
-      c = pc.get_correction(image_objects)
+      c = pc.generate_correction(image_objects)
 
       tre = 0.0
 
       if @parameters[:determine_tre] and @parameters[:determine_correction] then
+        
+        puts "calculating tre"
         
         tre = pc.determine_tre(image_objects)
 
@@ -538,7 +537,7 @@ module Cicada
       end
 
       
-      c.write(FileInteraction.correction_filename)
+      c.write_to_file(FileInteraction.correction_filename(@parameters))
 
       
 
@@ -579,18 +578,17 @@ module Cicada
 
         FileInteraction.write_differences(diffs, @parameters)
 
+        if corr_fit_params then
+
+          @logger.info { "p3d fit parameters after in situ correction: #{fitparams.join(', ') }" }
+                
+        else
+
+          @logger.info { "unable to fit after in situ correction" } 
+
+        end
+
       end
-
-      if corr_fit_params then
-
-        @logger.info { "p3d fit parameters after in situ correction: #{fitparams.join(', ') }" }
-
-      else
-
-        @logger.info { "unable to fit after in situ correction" } 
-
-      end
-
 
     end
 
@@ -627,7 +625,7 @@ module Cicada
 
       p = parser.parseFileToParameterDictionary(fn)
 
-      c = Cicada::Cicada.new(p)
+      c = new(p)
 
       c.go
 
@@ -644,7 +642,7 @@ end
 #
 if __FILE__ == $0 then
 
-  Cicada::Cicada.run_from_parameter_file(ARGV[0])
+  Cicada::CicadaMain.run_from_parameter_file(ARGV[0])
 
 end
 

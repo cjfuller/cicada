@@ -1,3 +1,5 @@
+#!/usr/bin/env ruby
+
 #--
 # /* ***** BEGIN LICENSE BLOCK *****
 #  * 
@@ -24,8 +26,12 @@
 #  * ***** END LICENSE BLOCK ***** */
 #++
 
-require 'rimageanalysistools'
+require 'cicada'
 
-require 'cicada/cicada_main'
+##
+# Start the analysis using the parameter file
+# specified on the command line.
+#
+Cicada::CicadaMain.run_from_parameter_file(ARGV[0])
 
 

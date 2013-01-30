@@ -1,17 +1,25 @@
 
-Gem::Specification.new do |gem|
+require 'lib/cicada/version'
 
-  gem.name = "cicada"
-  gem.version = 0.9
-  gem.date = Date.today.to_s
-  gem.summary = "CICADA (Colocalization and In-situ Correction of Aberration for Distance Analysis) implementation"
-  gem.description = ""
-  gem.authors = ['Colin J. Fuller']
-  gem.email = 'cjfuller@gmail.com'
-  gem.homepage = 'http://github.com/cjfuller/colocalization3d'
-  gem.add_dependency('pqueue', 'facets', 'rimageanalysistools')
-  gem.add_development_dependency('rspec')
-  gem.files = Dir['lib/**/*.rb']
+Gem::Specification.new do |g|
+
+  g.name = "cicada"
+  g.version = Cicada::VERSION
+  g.date = '2013-01-29'
+  g.summary = "CICADA implementation"  
+  g.description = "CICADA (Colocalization and In-situ Correction of Aberration for Distance Analysis) implementation; see Fuller and Straight J. Microscopy (2012) doi:10.1111/j.1365-2818.2012.03654.x"
+  g.authors = ['Colin J. Fuller']
+  g.email = 'cjfuller@gmail.com'
+  g.homepage = 'http://github.com/cjfuller/cicada'
+  g.add_runtime_dependency 'pqueue'
+  g.add_runtime_dependency 'facets'
+  g.add_runtime_dependency 'rimageanalysistools'
+  g.add_development_dependency 'rspec'
+  g.files = Dir['lib/**/*.rb', 'spec/**/*.rb', 'bin/**/*']
+  g.executables << 'cicada'
+  g.license = 'MIT'
+  g.platform = 'java'
+  g.requirements = 'jruby'
 
 end
   

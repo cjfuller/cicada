@@ -39,6 +39,7 @@ require 'rimageanalysistools/fitting/bisquare_linear_fit'
 require 'rimageanalysistools/thread_queue'
 
 java_import Java::org.apache.commons.math3.linear.ArrayRealVector
+java_import Java::java.util.concurrent.Executors
 
 module Cicada
 
@@ -67,7 +68,7 @@ module Cicada
     #
     def initialize(p)
       @parameters = p
-      @pixel_to_distance_conversions = Vector[p[:pixelsize_nm], p[:pixelsize_nm], p[:z_sectionsize_nm]]
+      @pixel_to_distance_conversions = Vector[p[:pixelsize_nm].to_f, p[:pixelsize_nm].to_f, p[:z_sectionsize_nm].to_f]
     end
 
 
@@ -407,20 +408,26 @@ module Cicada
       ref_ch = @parameters[:reference_channel].to_i
       corr_ch = @parameters[:channel_to_correct].to_i
 
-      threads = []
+      results = []
 
-      tq = RImageAnalysisTools::ThreadQueue.new
+      max_threads = 1
 
       if @parameters[:max_threads]
-        tq.max_threads = @parameters[:max_threads]
+        max_threads = @parameters[:max_threads].to_i
       end
 
-      iobjs.each do |iobj|
+      tq = Executors.newFixedThreadPool(max_threads)
 
-        RImageAnalysisTools::ThreadQueue.new_scope_with_vars(iobj, iobjs) do |obj, objs|
+      mut = Mutex.new
+
+      iobjs.each_with_index do |iobj, i|
+
+        RImageAnalysisTools::ThreadQueue.new_scope_with_vars(iobj, iobjs, i) do |obj, objs, ii|
           
-          tq.enqueue do 
+          tq.submit do 
             
+            puts "Calculating TRE.  Progress: #{ii} of #{objs.length}" if ii.modulo(10) == 0
+
             temp_objs = objs.select { |e| e != obj }
 
             c = generate_correction(temp_objs)
@@ -449,17 +456,29 @@ module Cicada
 
             end
 
-            result
+            mut.synchronize do
 
+              results << result
+
+            end
+
+            result
+            
           end
 
         end
 
       end
 
-      tq.start_queue
+      tq.shutdown
 
-      tre_values = tq.finish
+      until tq.isTerminated do
+
+        sleep 0.4
+
+      end
+
+      tre_values = results
 
       tre_values.select! { |e| e.success }
 

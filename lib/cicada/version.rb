@@ -24,8 +24,10 @@
 #  * ***** END LICENSE BLOCK ***** */
 #++
 
-require 'rimageanalysistools'
+module Cicada
 
-require 'cicada/cicada_main'
+  VERSION = "0.9.0"
+
+end
 
 

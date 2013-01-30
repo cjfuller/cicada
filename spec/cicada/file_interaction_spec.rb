@@ -52,8 +52,6 @@ describe Cicada::Serialization do
 
   end
 
-
-
 end
 
 
