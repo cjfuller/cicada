@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/cjfuller/cicada.png)](https://travis-ci.org/cjfuller/cicada)
+
 #Introduction
 
 This package is a ruby implementation of Colocalization and In-situ Correction of Aberration for Distance Analysis (CICADA).  (See Fuller and Straight, 2012, doi:10.1111/j.1365-2818.2012.03654.x)
