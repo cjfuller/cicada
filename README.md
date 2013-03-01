@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/cjfuller/cicada.png)](https://travis-ci.org/cjfuller/cicada)
+Build status: [![Build Status](https://travis-ci.org/cjfuller/cicada.png)](https://travis-ci.org/cjfuller/cicada)
 
 #Introduction
 
