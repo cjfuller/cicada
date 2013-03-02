@@ -117,6 +117,78 @@ module Cicada
 
     end
 
+
+    ##
+    # Writes all the points used for correction to XML within a supplied correction
+    #  XML element
+    #
+    # @param [REXML::Element] correction_element the XML element representing the correction
+    #
+    # @return [void]
+    #
+    def write_all_correction_point_xml(correction_element)
+
+      @distance_cutoffs.each_with_index do |e,i|
+
+        write_correction_point_xml(correction_element, i)
+
+      end
+
+    end
+
+
+    ##
+    # Writes a single point used for correction to XML within a supplied correction
+    #  XML element
+    #
+    # @param [REXML::Element] correction_element the XML element representing the correction
+    # @param [Integer] i the index of the point to write
+    #
+    # @return [void]
+    #
+    def write_correction_point_xml(correction_element, i)
+
+      cp = correction_element.add_element XML_STRINGS[:correction_point_element]
+
+      cp.attributes[XML_STRINGS[:x_pos_attr]]= @positions_for_correction[i,0]
+      cp.attributes[XML_STRINGS[:y_pos_attr]]= @positions_for_correction[i,1]
+      cp.attributes[XML_STRINGS[:z_pos_attr]]= @positions_for_correction[i,2]
+
+      point_dims_to_corr = {XML_STRINGS[:x_param_element] => @correction_x,
+                            XML_STRINGS[:y_param_element] => @correction_y,
+                            XML_STRINGS[:z_param_element] => @correction_z}
+
+
+      point_dims_to_corr.each do |dim_el, corr_txt|
+
+        p = cp.add_element dim_el
+
+        p.text = corr_txt[i].to_a.join(", ")
+
+      end
+
+    end
+
+    ##
+    # Writes the internal binary representation of the correction into
+    #  an XML element.
+    #
+    # @param [REXML::Element] correction_element the XML element representing the correction
+    #
+    # @return [void]
+    #
+    def write_correction_binary_data_element(correction_element)
+
+      bd = correction_element.add_element XML_STRINGS[:binary_data_element]
+
+      bd.attributes[XML_STRINGS[:encoding_attr]]= XML_STRINGS[:encoding_name]
+
+      bin_data = Base64.encode64(Marshal.dump(self))
+
+      bd.text = bin_data
+
+    end
+
     ##
     # Writes the correction to a string in XML format
     # 
@@ -134,35 +206,9 @@ module Cicada
 
       ce.attributes[XML_STRINGS[:corr_channel_attr]] = @correction_channel
       
-      @distance_cutoffs.each_with_index do |e, i|
+      write_all_correction_point_xml(ce)
 
-        cp = ce.add_element XML_STRINGS[:correction_point_element]
-
-        cp.attributes[XML_STRINGS[:x_pos_attr]]= @positions_for_correction[i,0]
-        cp.attributes[XML_STRINGS[:y_pos_attr]]= @positions_for_correction[i,1]
-        cp.attributes[XML_STRINGS[:z_pos_attr]]= @positions_for_correction[i,2]
-
-        xp = cp.add_element XML_STRINGS[:x_param_element]
-
-        xp.text = @correction_x[i].to_a.join(", ")
-
-        yp = cp.add_element XML_STRINGS[:y_param_element]
-
-        yp.text = @correction_y[i].to_a.join(", ")
-
-        zp = cp.add_element XML_STRINGS[:z_param_element]
-        
-        zp.text = @correction_z[i].to_a.join(", ")
-        
-      end
-
-      bd = ce.add_element XML_STRINGS[:binary_data_element]
-
-      bd.attributes[XML_STRINGS[:encoding_attr]]= XML_STRINGS[:encoding_name]
-
-      bin_data = Base64.encode64(Marshal.dump(self))
-
-      bd.text = bin_data
+      write_correction_binary_data_element(ce)
 
       doc_string = ""
 
