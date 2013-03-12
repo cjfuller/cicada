@@ -538,6 +538,7 @@ module Cicada
       FileInteraction.write_position_data(image_objects, @parameters)
 
       pc = PositionCorrector.new(@parameters)
+      pc.logger= @logger
 
       c = pc.generate_correction(image_objects)
 
@@ -545,7 +546,7 @@ module Cicada
 
       if @parameters[:determine_tre] and @parameters[:determine_correction] then
         
-        puts "calculating tre"
+        self.logger.info("calculating tre")
         
         tre = pc.determine_tre(image_objects)
 

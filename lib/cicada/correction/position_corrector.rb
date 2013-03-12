@@ -29,6 +29,7 @@ require 'cicada/mutable_matrix'
 require 'cicada/correction/correction'
 
 require 'ostruct'
+require 'logger'
 
 require 'pqueue'
 
@@ -59,7 +60,7 @@ module Cicada
     # for a 2d quadratic fit)
     NUM_CORR_PARAM = 6
 
-    attr_accessor :parameters, :pixel_to_distance_conversions
+    attr_accessor :parameters, :pixel_to_distance_conversions, :logger
 
     ##
     # Constructs a new position corrector with the specified parameters
@@ -69,6 +70,7 @@ module Cicada
     def initialize(p)
       @parameters = p
       @pixel_to_distance_conversions = Vector[p[:pixelsize_nm].to_f, p[:pixelsize_nm].to_f, p[:z_sectionsize_nm].to_f]
+      @logger = Logger.new(STDOUT)
     end
 
 
@@ -281,12 +283,10 @@ module Cicada
 
       mean_corr_vec.map! { |e| e / corrected_vec_diffs.length }
 
-      #TODO - logging
-
-      puts "mean components uncorrected: [#{mean_uncorr_vec.join(', ')}]"
-      puts "mean distance uncorrected: #{Vector[*mean_uncorr_vec].norm}"
-      puts "mean components corrected: [#{mean_corr_vec.join(', ')}]"
-      puts "mean distance corrected: #{Vector[*mean_corr_vec].norm}"
+      self.logger.info("mean components uncorrected: [#{mean_uncorr_vec.join(', ')}]")
+      self.logger.info("mean distance uncorrected: #{Vector[*mean_uncorr_vec].norm}")
+      self.logger.info("mean components corrected: [#{mean_corr_vec.join(', ')}]")
+      self.logger.info("mean distance corrected: #{Vector[*mean_corr_vec].norm}")
 
     end
 
@@ -426,7 +426,7 @@ module Cicada
           
           tq.submit do 
             
-            puts "Calculating TRE.  Progress: #{ii} of #{objs.length}" if ii.modulo(10) == 0
+            self.logger.debug("Calculating TRE.  Progress: #{ii} of #{objs.length}") if ii.modulo(10) == 0
 
             temp_objs = objs.select { |e| e != obj }
 
@@ -486,10 +486,8 @@ module Cicada
       
       tre_2d = Math.mean(tre_values) { |e| e.tre_xy }
 
-      #TODO logging
-
-      puts "TRE: #{tre_3d}"
-      puts "X-Y TRE: #{tre_2d}"
+      self.logger.info("TRE: #{tre_3d}")
+      self.logger.info("X-Y TRE: #{tre_2d}")
 
       tre_3d
 
