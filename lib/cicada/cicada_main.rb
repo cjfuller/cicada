@@ -293,7 +293,7 @@ module Cicada
         y = fp.getPosition(ImageCoordinate::Y)
         z = fp.getPosition(ImageCoordinate::Z)
 
-        ok = (range_x.include?(x) and range_y.include?(y) and (range_z.include?(z) or toCheck.getParent.getDimensionSizes[:z] == 1))
+        ok = (range_x.include?(x) and range_y.include?(y) and (range_z.include?(z) or to_check.getParent.getDimensionSizes[:z] == 1))
 
         unless ok then
           
