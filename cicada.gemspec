@@ -19,6 +19,7 @@ Gem::Specification.new do |g|
   g.files = Dir['lib/**/*.rb', 'spec/**/*.rb', 'bin/**/*']
   g.executables << 'cicada'
   g.executables << 'cicada_fit_only'
+  g.executables << 'cicada_generate_map'
   g.license = 'MIT'
   g.platform = 'java'
   g.requirements = 'jruby'
