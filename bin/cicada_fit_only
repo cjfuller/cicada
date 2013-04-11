@@ -1,3 +1,5 @@
+#!/usr/bin/env ruby
+
 #--
 # /* ***** BEGIN LICENSE BLOCK *****
 #  * 
@@ -24,10 +26,12 @@
 #  * ***** END LICENSE BLOCK ***** */
 #++
 
-module Cicada
+require 'cicada'
 
-  VERSION = "0.9.3"
+p = Cicada::CicadaMain.parse_parameter_file(ARGV[0])
 
-end
+c = Cicada::CicadaMain.new(p)
+
+c.do_and_save_fits
 
 

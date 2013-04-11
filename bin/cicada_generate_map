@@ -1,3 +1,5 @@
+#!/usr/bin/env ruby
+
 #--
 # /* ***** BEGIN LICENSE BLOCK *****
 #  * 
@@ -24,10 +26,27 @@
 #  * ***** END LICENSE BLOCK ***** */
 #++
 
-module Cicada
+require 'trollop'
 
-  VERSION = "0.9.3"
+require 'cicada'
+require 'cicada/file_interaction'
+require 'cicada/aberration_map'
+require 'cicada/correction/correction'
 
+opts = Trollop.options do
+	opt :parameter_file, "Parameter file", type: :string
+	opt :size_x, "Width of map in pixels", type: :integer, default: 256
+	opt :size_y, "Height of map in pixels", type: :integer, default: 256
+	opt :output_file, "Map output filename", type: :string
 end
 
+p = Cicada::CicadaMain.parse_parameter_file(opts[:parameter_file])
+
+corr_file_fn = Cicada::FileInteraction.correction_filename(p)
+
+c = Cicada::Correction.read_from_file(corr_file_fn)
+
+ab_map = Cicada::AberrationMap.generate(c, [0, opts[:size_x]], [0, opts[:size_y]], p)
+
+ab_map.write_to_file(opts[:output_file])
 

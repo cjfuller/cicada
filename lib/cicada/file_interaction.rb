@@ -27,6 +27,7 @@
 require 'ostruct'
 require 'base64'
 require 'rexml/document'
+require 'csv'
 
 require 'rimageanalysistools'
 require 'rimageanalysistools/get_image'
@@ -142,6 +143,9 @@ module Cicada
     # extension on position data (image object) files.
     POS_XML_EXTENSION = "_position_data.xml"
 
+    # extension on human-friendly position data (image object) files.
+    POS_HUMAN_EXTENSION = "_position_data.csv"
+
     # extension on the correction files
     CORR_XML_EXTENSION = "_correction.xml"
 
@@ -177,6 +181,20 @@ module Cicada
       dir = p[:data_directory]
       File.expand_path(p[:basename_set].split(MULTI_NAME_SEP)[0] + POS_XML_EXTENSION, dir)
     end
+
+
+    ##
+    # Gets the filename to which human-friendly-formatted object positions will be written.
+    #
+    # @param [ParameterDictionary, Hash] p a hash-like object specifying the filename for the positions.
+    #
+    # @return [String] the absolute path to the position file.
+    #
+    def self.human_friendly_position_data_filename(p)
+      dir = p[:data_directory]
+      File.expand_path(p[:basename_set].split(MULTI_NAME_SEP)[0] + POS_HUMAN_EXTENSION, dir)
+    end
+
 
     ##
     # Gets the filename of data to use for in situ correction from a parameter dictionary.
@@ -308,6 +326,10 @@ module Cicada
       
       write_position_data_file(image_objects,fn)
 
+      fn2 = human_friendly_position_data_filename(p)
+
+      write_human_friendly_position_data_file(image_objects, fn2)      
+
     end
 
     ##
@@ -327,6 +349,46 @@ module Cicada
       end
 
     end
+
+    ##
+    # Writes the provided image objects to a human-readable file 
+    # at the location specified.
+    #
+    # @see write_position_data_file
+    #
+    def self.write_human_friendly_position_data_file(image_objects, fn)
+
+      CSV.open(fn, 'wb') do |csv|
+
+        obj = image_objects[0]
+
+        n_channels = obj.getFitParametersByChannel.size
+
+        headers = ["object_id"]
+        n_channels.times do |i|
+          headers.concat(["pos#{i}_x", "pos#{i}_y", "pos#{i}_z"])
+        end
+
+        csv << headers
+
+        image_objects.each do |im_obj|
+
+          row = [im_obj.getLabel]
+
+          n_channels.times do |i|
+
+            row.concat(im_obj.getPositionForChannel(i).toArray)
+
+          end
+
+          csv << row
+
+        end
+
+      end
+
+    end
+
 
     ##
     # Gets the filename for storing/reading the correction based upon the supplied parameter dictionary.

@@ -14,9 +14,11 @@ Gem::Specification.new do |g|
   g.add_runtime_dependency 'pqueue'
   g.add_runtime_dependency 'facets'
   g.add_runtime_dependency 'rimageanalysistools'
+  g.add_runtime_dependency 'trollop'
   g.add_development_dependency 'rspec'
   g.files = Dir['lib/**/*.rb', 'spec/**/*.rb', 'bin/**/*']
   g.executables << 'cicada'
+  g.executables << 'cicada_fit_only'
   g.license = 'MIT'
   g.platform = 'java'
   g.requirements = 'jruby'

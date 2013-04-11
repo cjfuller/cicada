@@ -157,7 +157,15 @@ module Cicada
         
           @logger.debug { "Processing object #{obj.getLabel}" }
 
-          obj.fitPosition(@parameters)
+          begin
+
+            obj.fitPosition(@parameters)
+
+          rescue => e
+
+            logger.error { "error while processing object #{obj.label}: #{e.message}" }
+
+          end
 
       end
 
@@ -503,6 +511,8 @@ module Cicada
         
       end
 
+      puts "number of image objects: #{image_objects.size}"
+
       image_objects
 
     end
@@ -527,16 +537,33 @@ module Cicada
 
 
     ##
+    # Fits all objects in an image or loads objects from disk if they have already
+    # been fit and refitting has not been requested.
+    #
+    # Saves fits to disk in the parameter-specified data directory.
+    #
+    # @return [List<ImageObject>] the fitted or loaded image objects
+    #
+    def do_and_save_fits
+
+      image_objects = load_or_fit_image_objects
+
+      FileInteraction.write_position_data(image_objects, @parameters)
+
+      image_objects
+
+    end
+
+
+    ##
     # Runs the analysis.
     #
     # @return [void]
     #
     def go
 
-      image_objects = load_or_fit_image_objects
+      image_objects = do_and_save_fits
       
-      FileInteraction.write_position_data(image_objects, @parameters)
-
       pc = PositionCorrector.new(@parameters)
       pc.logger= @logger
 
@@ -632,6 +659,24 @@ module Cicada
 
     end
 
+
+    ##
+    # Reads a parameters file and creates a parameter dictionary.
+    #
+    # @param [String] fn the filename of the parameter file
+    #
+    # @return [ParameterDictionary] the parsed parameters
+    #
+    def self.parse_parameter_file(fn)
+
+      java_import Java::edu.stanford.cfuller.imageanalysistools.meta.AnalysisMetadataParserFactory
+
+      parser = AnalysisMetadataParserFactory.createParserForFile(fn)
+
+      parser.parseFileToParameterDictionary(fn)
+
+    end
+
     ##
     # Runs analysis using a specified parameter file.
     #
@@ -641,11 +686,7 @@ module Cicada
     #
     def self.run_from_parameter_file(fn)
 
-      java_import Java::edu.stanford.cfuller.imageanalysistools.meta.AnalysisMetadataParserFactory
-
-      parser = AnalysisMetadataParserFactory.createParserForFile(fn)
-
-      p = parser.parseFileToParameterDictionary(fn)
+      p = parse_parameter_file(fn)
 
       c = new(p)
 
