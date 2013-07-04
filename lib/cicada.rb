@@ -25,7 +25,4 @@
 #++
 
 require 'rimageanalysistools'
-
 require 'cicada/cicada_main'
-
-

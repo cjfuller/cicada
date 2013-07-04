@@ -24,52 +24,34 @@
 #  * ***** END LICENSE BLOCK ***** */
 #++
 
-require 'cicada/correction/position_corrector'
 require 'rimageanalysistools'
 require 'rimageanalysistools/image_shortcuts'
 require 'rimageanalysistools/create_parameters'
 
+require 'cicada/correction/position_corrector'
+
 java_import Java::edu.stanford.cfuller.imageanalysistools.image.ImageFactory
 
 module Cicada
-
 	class AberrationMap
 
 		def self.generate(c, bounds_x, bounds_y, params)
-
 			size_x = bounds_x[1] - bounds_x[0]
 			size_y = bounds_y[1] - bounds_y[0]
-
 			ab_map = ImageFactory.createWritable(ImageCoordinate[size_x, size_y, 3,1, 1], 0.0)
-
 			ab_map.setBoxOfInterest(ImageCoordinate[0,0,0,0,0], ImageCoordinate[size_x, size_y, 1, 1, 1])
-
 			ic2 = ImageCoordinate[0,0,0,0,0]
-
 			dist_conv = [params[:pixelsize_nm].to_f, params[:pixelsize_nm].to_f, params[:z_sectionsize_nm].to_f]
 
 			ab_map.each do |ic|
-
 				ic2.setCoord(ic)
-
 				corr = c.correct_position(ic[:x] + bounds_x[0], ic[:y] + bounds_y[0])
-
 				0.upto(2) do |dim|
-
 					ic2[:z] = dim
-
 					ab_map[ic2] = corr[dim] * dist_conv[dim]
-
 				end
-
 			end
-
 			ab_map
-
 		end
-
 	end
-
 end
-
-

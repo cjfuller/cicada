@@ -1,7 +1,7 @@
 #--
 # /* ***** BEGIN LICENSE BLOCK *****
 #  * 
-#  * Copyright (c) 2012 Colin J. Fuller
+#  * Copyright (c) 2012, 2013 Colin J. Fuller
 #  * 
 #  * Permission is hereby granted, free of charge, to any person obtaining a copy
 #  * of this software and associated documentation files (the Software), to deal
@@ -24,28 +24,26 @@
 #  * ***** END LICENSE BLOCK ***** */
 #++
 
+require 'ostruct'
+require 'logger'
+
+require 'facets/math/sum'
+require 'rimageanalysistools'
+require 'rimageanalysistools/image_shortcuts'
+require 'rimageanalysistools/create_parameters'
+require 'edu/stanford/cfuller/imageanalysistools/resources/common_methods'
+
 require 'cicada/file_interaction'
 require 'cicada/correction/correction'
 require 'cicada/correction/position_corrector'
 require 'cicada/fitting/p3d_fitter'
-require 'ostruct'
-require 'logger'
 
-
-require 'rimageanalysistools'
-require 'rimageanalysistools/image_shortcuts'
-require 'rimageanalysistools/create_parameters'
-
-require 'facets/math/sum'
-
-require 'edu/stanford/cfuller/imageanalysistools/resources/common_methods'
+java_import Java::java.util.concurrent.Executors
 
 java_import Java::edu.stanford.cfuller.imageanalysistools.filter.ImageSubtractionFilter
 java_import Java::edu.stanford.cfuller.imageanalysistools.image.Histogram
 java_import Java::edu.stanford.cfuller.imageanalysistools.fitting.GaussianImageObject
 java_import Java::edu.stanford.cfuller.imageanalysistools.meta.parameters.ParameterDictionary
-
-java_import Java::java.util.concurrent.Executors
 
 
 module Cicada
@@ -75,23 +73,16 @@ module Cicada
     #  containing all the parameters for the analysis.
     #
     def initialize(p)
-      
       @parameters = p
-
       @parameters = RImageAnalysisTools.create_parameter_dictionary(p) unless @parameters.is_a? ParameterDictionary
-
       @failures = {r2: 0, edge: 0, sat: 0, sep: 0, err: 0}
 
       if @parameters[:darkcurrent_image] then
-
         @dark_image = FileInteraction.load_image(@parameters[:darkcurrent_image])
-
       end
 
       set_up_logging
-      
     end
-
     
     ##
     # Load the position data from disk if this is requested in the specified parameters.  If this
@@ -101,17 +92,12 @@ module Cicada
     #   this should be recalculated or if the file cannot be found.
     #
     def load_position_data
-
       if @parameters[:precomputed_position_data] and FileInteraction.position_file_exists?(@parameters) then
-        
         return FileInteraction.read_position_data(@parameters)
-
       end
 
       nil
-
     end
-
 
     ##
     # Loads the image and mask from an image and mask pair and darkcurrent corrects the 
@@ -124,23 +110,16 @@ module Cicada
     # @return [void]
     #
     def load_and_dark_correct_image(im_set)
-
       im_set.image = FileInteraction.load_image(im_set.image_fn)
       im_set.mask = FileInteraction.load_image(im_set.mask_fn)
       
       if (@dark_image) then
-
         im_set.image = im_set.image.writableInstance
-
         isf = ImageSubtractionFilter.new
-
         isf.setSubtractPlanarImage(true)
-
         isf.setReferenceImage(@dark_image)
         isf.apply(im_set.image)
-
-      end
-      
+      end     
     end
 
     ##
@@ -152,23 +131,14 @@ module Cicada
     # @return [void]
     #
     def submit_single_object(obj, queue)
-
       queue.submit do 
-        
           @logger.debug { "Processing object #{obj.getLabel}" }
-
           begin
-
             obj.fitPosition(@parameters)
-
           rescue => e
-
             logger.error { "error while processing object #{obj.label}: #{e.message}" }
-
           end
-
       end
-
     end
 
     ##
@@ -181,55 +151,38 @@ module Cicada
     #   (one per unique greylevel in the mask).
     #
     def fit_objects_in_single_image(im_set)
-
       objs = []
-
       load_and_dark_correct_image(im_set)
 
       unless im_set.image and im_set.mask then
-        
         logger.error { "Unable to process image #{im_set.image_fn}." }
-
         return objs
-
       end
 
       h = Histogram.new(im_set.mask)
-
       max_threads = 1
-
       if @parameters[:max_threads] then
         max_threads = @parameters[:max_threads].to_i
       end
-
       thread_queue = Executors.newFixedThreadPool(max_threads)
 
       1.upto(h.getMaxValue) do |i|
-
         obj = GaussianImageObject.new(i, image_shallow_copy(im_set.mask), image_shallow_copy(im_set.image), ParameterDictionary.new(@parameters))
-
         obj.setImageID(im_set.image_fn)
-
         objs << obj
-
       end
 
       objs.each do |obj|
-
         submit_single_object(obj, thread_queue)
-
       end
 
       thread_queue.shutdown
-
       until thread_queue.isTerminated do
         sleep 0.4
       end
 
       objs
-
     end
-
 
     ##
     # Checks whether the fitting was successful for a given object according to several criteria: 
@@ -243,14 +196,10 @@ module Cicada
     # @return [Boolean] whether the fitting was successful by all criteria.
     #
     def check_fit(to_check)
-
       checks = [:check_r2, :check_edges, :check_saturation, :check_separation, :check_error]
-
       to_check.finishedFitting and checks.all? { |c| self.send(c, to_check) }
-
     end
 
-    
     ##
     # Checks whether the fit R^2 value is below the specified cutoff.
     #
@@ -258,25 +207,17 @@ module Cicada
     # @return [Boolean] whether the fitting was successful by this criterion.
     #
     def check_r2(to_check)
-
       return true unless @parameters[:residual_cutoff]
 
       to_check.getFitR2ByChannel.each do |r2|
-
-        if r2 < @parameters[:residual_cutoff].to_f then
-          
+        if r2 < @parameters[:residual_cutoff].to_f then       
           @failures[:r2] += 1
-
           @logger.debug { "check failed for object #{to_check.getLabel} R^2 = #{r2}" }
-
           return false
-
         end
-
       end
 
       true
-
     end
 
     ##
@@ -285,9 +226,7 @@ module Cicada
     # @return (see #check_r2)
     #
     def check_edges(to_check)
-
       eps = 0.1
-
       border_size = @parameters[:im_border_size].to_f
       z_size = @parameters[:half_z_size].to_f
 
@@ -296,29 +235,20 @@ module Cicada
       range_z = z_size...(to_check.getParent.getDimensionSizes[:z] - z_size)
 
       to_check.getFitParametersByChannel.each do |fp|
-        
         x = fp.getPosition(ImageCoordinate::X)
         y = fp.getPosition(ImageCoordinate::Y)
         z = fp.getPosition(ImageCoordinate::Z)
-
+        
         ok = (range_x.include?(x) and range_y.include?(y) and (range_z.include?(z) or to_check.getParent.getDimensionSizes[:z] == 1))
-
-        unless ok then
-          
+        unless ok then 
           @failures[:edge] += 1
-
           @logger.debug { "check failed for object #{to_check.getLabel} position: #{x}, #{y}, #{z}" }
-
           return false
-
         end
-
       end
 
       true
-
     end
-
 
     ##
     # Checks whether the camera has saturated in the object.
@@ -326,32 +256,21 @@ module Cicada
     # @return (see #check_r2)
     #
     def check_saturation(to_check)
-
       if @parameters[:max_greylevel_cutoff] then
-
         to_check.boxImages
-
         cutoff = @parameters[:max_greylevel_cutoff].to_f
-
         to_check.getParent.each do |ic|
 
           if to_check.getParent[ic] > cutoff then 
-
             to_check.unboxImages
             @failures[:sat] += 1
-
             @logger.debug { "check failed for object #{to_check.getLabel} greylevel: #{to_check.getParent[ic]}" }
-
             return false 
-
           end
-
         end
-
       end
-        
-      true
 
+      true
     end
 
     ##
@@ -365,43 +284,30 @@ module Cicada
     # @return (see #check_r2)
     #
     def check_separation(to_check)
-
       if @parameters[:distance_cutoff] then
-
         size_c = to_check.getFitParametersByChannel.size
-
         xy_pixelsize_2 = @parameters[:pixelsize_nm].to_f**2
-
         z_sectionsize_2 = @parameters[:z_sectionsize_nm].to_f**2
 
         0.upto(size_c-1) do |ci|
           0.upto(size_c-1) do |cj|
-
             fp1 = to_check.getFitParametersByChannel.get(ci)
             fp2 = to_check.getFitParametersByChannel.get(cj)
-
             ijdist = xy_pixelsize_2 * (fp1.getPosition(ImageCoordinate::X) - fp2.getPosition(ImageCoordinate::X))**2 +
               xy_pixelsize_2 * (fp1.getPosition(ImageCoordinate::Y) - fp2.getPosition(ImageCoordinate::Y))**2 +
               z_sectionsize_2 * (fp1.getPosition(ImageCoordinate::Z) - fp2.getPosition(ImageCoordinate::Z))**2
-
             ijdist = ijdist**0.5
 
             if (ijdist > @parameters[:distance_cutoff].to_f) then
-              
               @failures[:sep] += 1
               @logger.debug { "check failed for object #{to_check.getLabel} with distance: #{ijdist}" } 
-
               return false              
-
             end
-
           end
         end
-
       end
 
       true
-
     end
 
 
@@ -413,33 +319,21 @@ module Cicada
     # @return (see #check_r2)
     #
     def check_error(to_check)
-
       if @parameters[:fit_error_cutoff] then
-
         total_error = 0
-
         to_check.getFitErrorByChannel.each do |d|
-
           total_error += d**2
-
         end
-
         total_error = total_error**0.5
 
         if total_error > @parameters[:fit_error_cutoff].to_f or total_error.nan? then
-
           @failures[:err] += 1
-
           @logger.debug { "check failed for object #{to_check.getLabel} with total fitting error: #{total_error}" }
-
           return false
-
         end
-
       end
 
       true
-
     end
 
     ##
@@ -449,27 +343,17 @@ module Cicada
     # @return (void)
     #
     def set_up_logging
-
       if @parameters[:log_to_file] then
-
         @logger = Logger.new(@parameters[:log_to_file])
-
       else
-
         @logger = Logger.new(STDOUT)
-
       end
 
       if @parameters[:log_detailed_messages] then
-        
         @logger.sev_threshold = Logger::DEBUG
-
       else
-
         @logger.sev_threshold = Logger::INFO
-
       end
-
     end
 
     ##
@@ -480,41 +364,26 @@ module Cicada
     #   successfully fit objects that have passed all checks are included.
     #
     def load_or_fit_image_objects
-
       image_objects = load_position_data
-
       unless image_objects then
-
         image_objects = []
-
         to_process = FileInteraction.list_files(@parameters)
-
-        to_process.each do |im_set|
-          
+        
+        to_process.each do |im_set|      
           objs = fit_objects_in_single_image(im_set)
-
-          objs.each do |o|
-            
+          objs.each do |o| 
             if check_fit(o) then
-
               image_objects << o
-
             end
-
             o.nullifyImages
-
           end
-
         end
 
         log_fitting_failures
-        
       end
 
       puts "number of image objects: #{image_objects.size}"
-
       image_objects
-
     end
 
 
@@ -524,15 +393,10 @@ module Cicada
     # @return [void]
     #
     def log_fitting_failures
-
       @logger.info { "fitting failures by type:" }
-
       @failures.each_key do |k|
-
         @logger.info { FAILURE_REASONS[k] + ": " + @failures[k].to_s }
-
       end
-
     end
 
 
@@ -545,13 +409,9 @@ module Cicada
     # @return [List<ImageObject>] the fitted or loaded image objects
     #
     def do_and_save_fits
-
       image_objects = load_or_fit_image_objects
-
       FileInteraction.write_position_data(image_objects, @parameters)
-
       image_objects
-
     end
 
 
@@ -561,84 +421,47 @@ module Cicada
     # @return [void]
     #
     def go
-
-      image_objects = do_and_save_fits
-      
+      image_objects = do_and_save_fits  
       pc = PositionCorrector.new(@parameters)
       pc.logger= @logger
-
       c = pc.generate_correction(image_objects)
-
       tre = 0.0
-
-      if @parameters[:determine_tre] and @parameters[:determine_correction] then
-        
-        self.logger.info("calculating tre")
-        
+      if @parameters[:determine_tre] and @parameters[:determine_correction] then       
+        self.logger.info("calculating tre")      
         tre = pc.determine_tre(image_objects)
-
         c.tre= tre
-
       else
-
         tre = c.tre
-
       end
-
-      
       c.write_to_file(FileInteraction.correction_filename(@parameters))
-
       
-
       diffs = pc.apply_correction(c, image_objects)
-
       corrected_image_objects = []
-
       image_objects.each do |iobj|
-
-        if iobj.getCorrectionSuccessful then
-          
+        if iobj.getCorrectionSuccessful then   
           corrected_image_objects << iobj
-
         end
-
       end
-
       FileInteraction.write_position_data(corrected_image_objects, @parameters)
-
-      
       image_objects = corrected_image_objects
-
+      
       df= P3DFitter.new(@parameters)
-
       fitparams = df.fit(image_objects, diffs)
-
       @logger.info { "p3d fit parameters: #{fitparams.join(', ')}" }
 
       if @parameters[:in_situ_aberr_corr_basename] and @parameters[:in_situ_aberr_corr_channel] then
-
         slopes = pc.determine_in_situ_aberration_correction
-
         vector_diffs = pc.apply_in_situ_aberration_correction(image_objects, slopes)
-
         scalar_diffs = get_scalar_diffs_from_vector(vector_diffs)
-
         corr_fit_params = df.fit(image_objects, scalar_diffs)
-
         FileInteraction.write_differences(diffs, @parameters)
 
         if corr_fit_params then
-
-          @logger.info { "p3d fit parameters after in situ correction: #{fitparams.join(', ') }" }
-                
+          @logger.info { "p3d fit parameters after in situ correction: #{fitparams.join(', ') }" }       
         else
-
           @logger.info { "unable to fit after in situ correction" } 
-
         end
-
       end
-
     end
 
     ##
@@ -650,13 +473,9 @@ module Cicada
     # @return [Array] an array of the norms of the vectors provided.
     #
     def get_scalar_diffs_from_vector(vector_diffs)
-
       vector_diffs.map do |vd|
-
         Math.sqrt(Math.sum(vd) { |e| e**2 })
-
       end
-
     end
 
 
@@ -668,13 +487,9 @@ module Cicada
     # @return [ParameterDictionary] the parsed parameters
     #
     def self.parse_parameter_file(fn)
-
       java_import Java::edu.stanford.cfuller.imageanalysistools.meta.AnalysisMetadataParserFactory
-
       parser = AnalysisMetadataParserFactory.createParserForFile(fn)
-
       parser.parseFileToParameterDictionary(fn)
-
     end
 
     ##
@@ -685,18 +500,11 @@ module Cicada
     # @return [void]
     #
     def self.run_from_parameter_file(fn)
-
       p = parse_parameter_file(fn)
-
       c = new(p)
-
       c.go
-
-    end
-      
-    
+    end 
   end
-
 end
 
 ##
@@ -704,13 +512,5 @@ end
 # specified on the command line.
 #
 if __FILE__ == $0 then
-
   Cicada::CicadaMain.run_from_parameter_file(ARGV[0])
-
 end
-
-
-
-
-
-

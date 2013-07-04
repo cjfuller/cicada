@@ -83,19 +83,12 @@ module Cicada
     # @return [RealVector] the commons math RealVector containing the same elements
     #
     def self.convert_to_realvector(vec)
-
       conv = ArrayRealVector.new(vec.size, 0.0)
-
       vec.each_with_index do |e, i|
-
         conv.setEntry(i, e)
-
       end
-
       conv
-
     end
-
 
     ##
     # Generates a correction from a specified array of image objects.
@@ -105,86 +98,58 @@ module Cicada
     # @return [Correction] the correction generated from the input objects
     #
     def generate_correction(iobjs)
-      
       #TODO refactor into smaller chunks
-
       ref_ch = parameters[:reference_channel].to_i
       corr_ch = parameters[:channel_to_correct].to_i
-
       unless parameters[:determine_correction] then
-
         return Correction.read_from_file(FileInteraction.correction_filename(parameters))
-
       end
 
       correction_x = []
       correction_y = []
       correction_z = []
-
       distance_cutoffs = MVector.zero(iobjs.size)
 
       iobjs.each_with_index do |obj, ind|
-
         obj_pos = obj.getPositionForChannel(ref_ch)
-        
-        distances_to_objects = iobjs.map { |obj2| obj2.getPositionForChannel(ref_ch).subtract(obj_pos).getNorm }
-               
+        distances_to_objects = iobjs.map { |obj2| obj2.getPositionForChannel(ref_ch).subtract(obj_pos).getNorm }   
         pq = PQueue.new
-
         np = @parameters[:num_points].to_i
 
         distances_to_objects.each do |d|
-
           if pq.size < np + 1 then
-
             pq.push d
-
           elsif d < pq.top then
-
             pq.pop
             pq.push d
-
           end
-
         end
 
-
         first_exclude = pq.pop
-
         last_dist = pq.pop
-
         distance_cutoff = (last_dist + first_exclude)/2.0
-
         distance_cutoffs[ind] = distance_cutoff
 
         objs_ind_to_fit = (0...iobjs.size).select { |i| distances_to_objects[i] < distance_cutoff }
-                
         objs_to_fit = iobjs.values_at(*objs_ind_to_fit)
 
         diffs_to_fit = MMatrix[*objs_to_fit.map { |e| e.getVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray }]
         x_to_fit = objs_to_fit.map { |e| e.getPositionForChannel(ref_ch).getEntry(0) }
         y_to_fit = objs_to_fit.map { |e| e.getPositionForChannel(ref_ch).getEntry(1) }
-        
         x = Vector[*x_to_fit.map { |e| e - obj_pos.getEntry(0) }]
         y = Vector[*y_to_fit.map { |e| e - obj_pos.getEntry(1) }]
 
         correction_parameters = Matrix.columns([MVector.unit(objs_to_fit.size), x, y, x.map { |e| e**2 }, y.map { |e| e**2 }, x.map2(y) { |ex, ey| ex*ey }])
-
         cpt = correction_parameters.transpose
-
         cpt_cp = cpt * correction_parameters
-
         cpt_cp_lup = cpt_cp.lup
 
         correction_x << cpt_cp_lup.solve(cpt * diffs_to_fit.column(0))
         correction_y << cpt_cp_lup.solve(cpt * diffs_to_fit.column(1))
         correction_z << cpt_cp_lup.solve(cpt * diffs_to_fit.column(2))
-     
-
       end
 
       Correction.new(correction_x, correction_y, correction_z, distance_cutoffs, iobjs, ref_ch, corr_ch)
-
     end
 
     ##
@@ -196,9 +161,7 @@ module Cicada
     # @return [Vector] the vector scaled to physical units (by parameter naming convention, in nm)
     #
     def apply_scale(vec)
-
       vec.map2(@pixel_to_distance_conversions) { |e1, e2| e1*e2 }
-
     end
 
     ##
@@ -211,46 +174,28 @@ module Cicada
     #  wavelengths for each image object provided.
     #
     def apply_correction(c, iobjs)
-     
       ref_ch = @parameters[:reference_channel].to_i
       corr_ch = @parameters[:channel_to_correct].to_i
-
       vec_diffs = iobjs.map { |e| e.getVectorDifferenceBetweenChannels(ref_ch, corr_ch) }
-
       vec_diffs.map! { |e| apply_scale(Vector[*e.toArray]) }
-
       corrected_vec_diffs = []
 
       if @parameters[:correct_images] then
-
         iobjs.each do |iobj|
-
           begin
-
             corrected_vec_diffs << correct_single_object(c, iobj, ref_ch, corr_ch)
-
             iobj.setCorrectionSuccessful(true)
-
           rescue UnableToCorrectError => e
-
             iobj.setCorrectionSuccessful(false)
-
           end
-
         end
-
         corrected_vec_diffs.map! { |e| apply_scale(e) }
-
       else 
-
         corrected_vec_diffs = vec_diffs
-        
       end
-      
+  
       print_distance_components(vec_diffs, corrected_vec_diffs)
-
       corrected_vec_diffs.map { |e| e.norm  } 
-
     end
 
     ##
@@ -262,32 +207,23 @@ module Cicada
     # @return [void]
     #
     def print_distance_components(vec_diffs, corrected_vec_diffs)
-
       mean_uncorr_vec = [0.0, 0.0, 0.0] 
-
       vec_diffs.each do |e|
-
         mean_uncorr_vec = mean_uncorr_vec.ewise + e.to_a
-
       end
 
       mean_corr_vec = [0.0, 0.0, 0.0]
-
       corrected_vec_diffs.each do |e|
-
         mean_corr_vec = mean_corr_vec.ewise + e.to_a
-
       end
 
       mean_uncorr_vec.map! { |e| e / vec_diffs.length }
-
       mean_corr_vec.map! { |e| e / corrected_vec_diffs.length }
 
       self.logger.info("mean components uncorrected: [#{mean_uncorr_vec.join(', ')}]")
       self.logger.info("mean distance uncorrected: #{Vector[*mean_uncorr_vec].norm}")
       self.logger.info("mean components corrected: [#{mean_corr_vec.join(', ')}]")
       self.logger.info("mean distance corrected: #{Vector[*mean_corr_vec].norm}")
-
     end
 
     ##
@@ -301,19 +237,13 @@ module Cicada
     # @return [Vector] the corrected (x,y,z) vector difference between the two channels
     #
     def correct_single_object(c, iobj, ref_ch, corr_ch)
-      
       corr = c.correct_position(iobj.getPositionForChannel(ref_ch).getEntry(0), iobj.getPositionForChannel(corr_ch).getEntry(1))
-
       if parameters[:invert_z_axis] then
-
         corr.setEntry(2, -1.0*corr.getEntry(2))
-
       end
 
       iobj.applyCorrectionVectorToChannel(corr_ch, PositionCorrector.convert_to_realvector(corr))
-      
       Vector.elements(iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray)
-
     end
 
     ##
@@ -322,11 +252,8 @@ module Cicada
     # @return @see #generate_in_situ_correction_from_iobjs
     #
     def generate_in_situ_correction
-      
       iobjs_for_in_situ_corr = FileInteraction.read_in_situ_corr_data(@parameters)
-
       generate_in_situ_correction_from_iobjs(iobjs_for_in_situ_corr)
-
     end
 
     ##
@@ -340,7 +267,6 @@ module Cicada
     #  dimension.  The intercept will be zero if disabled in the parameter file.
     #
     def generate_in_situ_correction_from_iobjs(iobjs_for_in_situ_corr)
-
       ref_ch = @parameters[:reference_channel].to_i
       corr_ch = @parameters[:channel_to_correct].to_i
       cicada_ch = @parameters[:in_situ_aberr_corr_channel]
@@ -349,17 +275,12 @@ module Cicada
       expt_diffs = Matrix.rows(iobjs_for_in_situ_corr.map { |iobj| iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray })
 
       bslf = BisquareLinearFit.new
-
       bslf.disableIntercept if @parameters[:disable_in_situ_corr_constant_offset]
-
       all_parameters = 0.upto(corr_diffs.column_size - 1).collect do |i|
-
         bslf.fit_rb(corr_diffs.column(i), expt_diffs.column(i)).toArray
-
       end
      
       all_parameters
-
     end
 
     ##
@@ -373,26 +294,19 @@ module Cicada
     #  wavelengths for each image object being corrected.
     #
     def apply_in_situ_correction(iobjs, corr_params)
-
       corr_params = corr_params.transpose
-
       ref_ch = @parameters[:reference_channel].to_i
       corr_ch = @parameters[:channel_to_correct].to_i
       cicada_ch = @parameters[:in_situ_aberr_corr_channel]
 
       corrected_differences = iobjs.map do |iobj|
-        
         corr_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, cicada_ch).toArray.to_a
         expt_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray.to_a
-
         correction = (corr_diff.ewise * corr_params[0]).ewise + corr_params[1]
-
         Vector.elements(expt_diff.ewise - correction, false)
-
       end
 
-      corrected_differences
-          
+      corrected_differences    
     end
 
     ##
@@ -404,96 +318,58 @@ module Cicada
     # @return [Float] the (3d) TRE
     #
     def determine_tre(iobjs)
-      
       ref_ch = @parameters[:reference_channel].to_i
       corr_ch = @parameters[:channel_to_correct].to_i
-
       results = []
-
       max_threads = 1
-
       if @parameters[:max_threads]
         max_threads = @parameters[:max_threads].to_i
       end
 
       tq = Executors.newFixedThreadPool(max_threads)
-
       mut = Mutex.new
 
       iobjs.each_with_index do |iobj, i|
-
         RImageAnalysisTools::ThreadQueue.new_scope_with_vars(iobj, iobjs, i) do |obj, objs, ii|
-          
           tq.submit do 
-            
             self.logger.debug("Calculating TRE.  Progress: #{ii} of #{objs.length}") if ii.modulo(10) == 0
-
             temp_objs = objs.select { |e| e != obj }
-
             c = generate_correction(temp_objs)
-
             pos = obj.getPositionForChannel(ref_ch)
-            
             result = OpenStruct.new
-
             begin
-            
               corr = c.correct_position(pos.getEntry(0), pos.getEntry(1))
-
               result.success = true
-
               tre_vec = Vector[*obj.getVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray] - corr
-
               tre_vec = tre_vec.map2(@pixel_to_distance_conversions) { |e1, e2| e1*e2 }
-
               result.tre = tre_vec.norm
-
               result.tre_xy = Math.hypot(tre_vec[0], tre_vec[1])
-
             rescue UnableToCorrectError => e
-
               result.success = false
-
             end
 
             mut.synchronize do
-
               results << result
-
             end
 
             result
-            
           end
-
         end
-
       end
 
       tq.shutdown
-
       until tq.isTerminated do
-
         sleep 0.4
-
       end
 
       tre_values = results
-
       tre_values.select! { |e| e.success }
-
       tre_3d = Math.mean(tre_values) { |e| e.tre }
-      
       tre_2d = Math.mean(tre_values) { |e| e.tre_xy }
-
       self.logger.info("TRE: #{tre_3d}")
       self.logger.info("X-Y TRE: #{tre_2d}")
 
       tre_3d
-
     end
-
   end
-
 end
-

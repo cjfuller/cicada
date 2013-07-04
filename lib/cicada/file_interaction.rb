@@ -55,28 +55,18 @@ module Cicada
     #  image objects.
     #
     def self.serialize_image_objects(image_objects)
-
       doc = REXML::Document.new
-
-
       doc.add_element "root"
 
       image_objects.each do |iobj|
-
         in_doc = REXML::Document.new iobj.writeToXMLString
-
         in_doc.root.elements[1, "serialized_form"].text = Base64.encode64(Marshal.dump(iobj))
-
         doc.root.add in_doc.elements[1,"image_object"]
-
       end
 
       output = ""
-
       doc.write(output, 2)
-
       output
-
     end
 
     ##
@@ -89,15 +79,7 @@ module Cicada
     # @return [ImageObject] the encoded ImageObject
     #
     def self.image_object_from_bytes(bin_data)
-
       Marshal.load(bin_data)
-
-      #j_bytes = bin_data.to_java_bytes
-
-      #oi = Java::java.io.ObjectInputStream.new(Java::java.io.ByteArrayInputStream.new(j_bytes))
-
-      #oi.readObject
-
     end
 
     ##
@@ -109,23 +91,16 @@ module Cicada
     # @return [Array<ImageObject>] the image objects encoded in the string
     #
     def self.unserialize_image_objects(data)
-
       objs = []
-
       doc = REXML::Document.new data
 
       doc.elements.each("*/image_object/serialized_form") do |el|
-
         bin_data = Base64.decode64(el.text)
-
         objs << image_object_from_bytes(bin_data)
-
       end
 
       objs
-
     end
-
   end
 
 
@@ -133,7 +108,6 @@ module Cicada
   # A collection of methods for interacting with input and output files for cicada.
   # 
   class FileInteraction
-
     # parameters required by the methods in this class
     REQUIRED_PARAMETERS = [:dirname_set, :basename_set, :mask_relative_dirname, :mask_extra_extension, :data_directory, :correction_date, :output_positions_to_directory]
 
@@ -155,7 +129,6 @@ module Cicada
     # separator used in the parameter file for multiple files, directories, etc.
     MULTI_NAME_SEP = ","
 
-
     ##
     # Loads an image from the specified file.
     #
@@ -164,11 +137,8 @@ module Cicada
     # @return [ReadOnlyImage] the image at the specified filename
     #
     def self.load_image(image_fn)
-
       RImageAnalysisTools.get_image(image_fn)
-
     end
-
 
     ##
     # Gets the filename to which / from which image object positions will be written / 
@@ -182,7 +152,6 @@ module Cicada
       File.expand_path(p[:basename_set].split(MULTI_NAME_SEP)[0] + POS_XML_EXTENSION, dir)
     end
 
-
     ##
     # Gets the filename to which human-friendly-formatted object positions will be written.
     #
@@ -194,7 +163,6 @@ module Cicada
       dir = p[:data_directory]
       File.expand_path(p[:basename_set].split(MULTI_NAME_SEP)[0] + POS_HUMAN_EXTENSION, dir)
     end
-
 
     ##
     # Gets the filename of data to use for in situ correction from a parameter dictionary.
@@ -229,15 +197,11 @@ module Cicada
     # @return [Array<ImageObject>] the image objects contained in the file.
     #
     def self.unserialize_position_data_file(fn)
-
       data_str = nil
-
       File.open(fn) do |f|
         data_str = f.read
       end
-
       Serialization.unserialize_image_objects(data_str)
-
     end
 
     ##
@@ -248,11 +212,8 @@ module Cicada
     # @return [Array<ImageObject>] the image objects associated with the analysis
     #
     def self.read_position_data(p)
-      
       fn = FileInteraction.position_data_filename(p)
-
       FileInteraction.unserialize_position_data_file(fn)
-
     end
 
     ##
@@ -265,11 +226,8 @@ module Cicada
     # @return [Array<ImageObject>] the image objects for in situ correction associated with the analysis
     #
     def self.read_in_situ_corr_data(p)
-
       fn = FileInteraction.in_situ_corr_data_filename(p)
-
       FileInteraction.unserialize_position_data_file(fn)
-
     end
 
     ##
@@ -281,35 +239,22 @@ module Cicada
     #  which return each image's filename and its paired mask's filename respectively.
     #
     def self.list_files(p)
-
       dirnames = p[:dirname_set].split(MULTI_NAME_SEP)
       basenames = p[:basename_set].split(MULTI_NAME_SEP)
-
       image_sets = []
 
       dirnames.each do |d|
-
         mask_dirname = File.join(d, p[:mask_relative_dirname])
-
         Dir.foreach(d) do |f|
-
-          if basenames.any? { |e| f.match(e) } then
-            
+          if basenames.any? { |e| f.match(e) } then    
             im = File.expand_path(f, d)
             msk = File.expand_path(f + p[:mask_extra_extension], mask_dirname)
-
-            current = OpenStruct.new(image_fn: im, mask_fn: msk)
-            
+            current = OpenStruct.new(image_fn: im, mask_fn: msk)    
             image_sets << current
-
           end          
-
         end
-
-      end
-      
+      end    
       image_sets
-
     end
 
     ##
@@ -321,15 +266,10 @@ module Cicada
     # @return [void]
     #
     def self.write_position_data(image_objects, p)
-
       fn = position_data_filename(p)
-      
       write_position_data_file(image_objects,fn)
-
       fn2 = human_friendly_position_data_filename(p)
-
-      write_human_friendly_position_data_file(image_objects, fn2)      
-
+      write_human_friendly_position_data_file(image_objects, fn2)
     end
 
     ##
@@ -341,13 +281,9 @@ module Cicada
     # @return [void]
     #
     def self.write_position_data_file(image_objects, fn)
-
       File.open(fn, 'w') do |f|
-
         f.write(Serialization.serialize_image_objects(image_objects))
-
       end
-
     end
 
     ##
@@ -357,38 +293,24 @@ module Cicada
     # @see write_position_data_file
     #
     def self.write_human_friendly_position_data_file(image_objects, fn)
-
       CSV.open(fn, 'wb') do |csv|
-
         obj = image_objects[0]
-
         n_channels = obj.getFitParametersByChannel.size
-
         headers = ["object_id"]
         n_channels.times do |i|
           headers.concat(["pos#{i}_x", "pos#{i}_y", "pos#{i}_z"])
         end
-
         csv << headers
 
         image_objects.each do |im_obj|
-
           row = [im_obj.getLabel]
-
           n_channels.times do |i|
-
             row.concat(im_obj.getPositionForChannel(i).toArray)
-
           end
-
           csv << row
-
         end
-
       end
-
     end
-
 
     ##
     # Gets the filename for storing/reading the correction based upon the supplied parameter dictionary.
@@ -398,12 +320,9 @@ module Cicada
     # @return [String] the filename for the correction file.
     #
     def self.correction_filename(p)
-
       dir = p[:data_directory]
       fn = p[:correction_date]
-
       File.expand_path(fn + CORR_XML_EXTENSION, dir)
-
     end
 
     ##
@@ -415,25 +334,13 @@ module Cicada
     # @return [void]
     #
     def self.write_differences(diffs, p)
-
       dirname = p[:output_positions_to_directory]
-      
       fn = File.expand_path(p[:basename_set] + DIFFS_TXT_EXTENSION, dirname)
-
       File.open(fn, 'w') do |f|
-
         diffs.each do |d|
-
           f.puts(d.to_s)
-
         end
-
       end
-
     end
-
   end
-
 end
-
-
