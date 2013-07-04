@@ -36,9 +36,8 @@ require 'ostruct'
 describe Cicada::PositionCorrector do 
   
   before :each do 
-
-    @p = {reference_channel: 0, channel_to_correct: 1, half_box_size: 3, half_z_size: 5, pixelsize_nm: 80, z_sectionsize_nm: 100, num_points: 36, num_wavelengths: 3, log_detailed_messages: true, max_threads: 10, photons_per_greylevel: 0.125, determine_correction: true, fit_error_cutoff: 10, correct_images: true}
-
+    @p = {}
+    setup_default_parameters(@p)
   end
 
   it "should generate a correction correctly" do
@@ -115,7 +114,7 @@ describe Cicada::PositionCorrector do
 
     pc = Cicada::PositionCorrector.new(@p)
 
-    corr = pc.generate_in_situ_correction_from_iobjs(load_iobjs)
+    corr = pc.generate_in_situ_correction_from_iobjs(load_iobjs).corr_parameters.transpose
 
     x_corr = corr[0]
     y_corr = corr[1]

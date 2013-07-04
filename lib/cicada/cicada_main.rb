@@ -74,7 +74,7 @@ module Cicada
     #
     def initialize(p)
       @parameters = p
-      @parameters = RImageAnalysisTools.create_parameter_dictionary(p) unless @parameters.is_a? ParameterDictionary
+      #@parameters = RImageAnalysisTools.create_parameter_dictionary(p) unless @parameters.is_a? ParameterDictionary
       @failures = {r2: 0, edge: 0, sat: 0, sep: 0, err: 0}
 
       if @parameters[:darkcurrent_image] then
@@ -424,16 +424,20 @@ module Cicada
       image_objects = do_and_save_fits  
       pc = PositionCorrector.new(@parameters)
       pc.logger= @logger
-      c = pc.generate_correction(image_objects)
-      tre = 0.0
-      if @parameters[:determine_tre] and @parameters[:determine_correction] then       
-        self.logger.info("calculating tre")      
-        tre = pc.determine_tre(image_objects)
-        c.tre= tre
-      else
-        tre = c.tre
+
+      if @parameters[:correct_images] then
+        c = pc.generate_correction(image_objects)
+
+        tre = 0.0
+        if @parameters[:determine_tre] and @parameters[:determine_correction] then       
+          self.logger.info("calculating tre")      
+          tre = pc.determine_tre(image_objects)
+          c.tre= tre
+        else
+          tre = c.tre
+        end
+        c.write_to_file(FileInteraction.correction_filename(@parameters))
       end
-      c.write_to_file(FileInteraction.correction_filename(@parameters))
       
       diffs = pc.apply_correction(c, image_objects)
       corrected_image_objects = []
@@ -450,8 +454,8 @@ module Cicada
       @logger.info { "p3d fit parameters: #{fitparams.join(', ')}" }
 
       if @parameters[:in_situ_aberr_corr_basename] and @parameters[:in_situ_aberr_corr_channel] then
-        slopes = pc.determine_in_situ_aberration_correction
-        vector_diffs = pc.apply_in_situ_aberration_correction(image_objects, slopes)
+        isc = pc.determine_in_situ_aberration_correction
+        vector_diffs = pc.apply_in_situ_aberration_correction(image_objects, isc)
         scalar_diffs = get_scalar_diffs_from_vector(vector_diffs)
         corr_fit_params = df.fit(image_objects, scalar_diffs)
         FileInteraction.write_differences(diffs, @parameters)
@@ -477,7 +481,6 @@ module Cicada
         Math.sqrt(Math.sum(vd) { |e| e**2 })
       end
     end
-
 
     ##
     # Reads a parameters file and creates a parameter dictionary.

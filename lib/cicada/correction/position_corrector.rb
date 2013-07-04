@@ -25,17 +25,15 @@
 #++
 
 require 'cicada/mutable_matrix'
-
 require 'cicada/correction/correction'
+require 'cicada/correction/in_situ_correction'
 
 require 'ostruct'
 require 'logger'
 
 require 'pqueue'
-
 require 'facets/enumerable/ewise'
 require 'facets/math/mean'
-
 require 'rimageanalysistools/fitting/bisquare_linear_fit'
 require 'rimageanalysistools/thread_queue'
 
@@ -72,7 +70,6 @@ module Cicada
       @pixel_to_distance_conversions = Vector[p[:pixelsize_nm].to_f, p[:pixelsize_nm].to_f, p[:z_sectionsize_nm].to_f]
       @logger = Logger.new(STDOUT)
     end
-
 
     ##
     # Creates a RealVector (org.apache.commons.math3.linear.RealVector) that is a copy of
@@ -180,7 +177,9 @@ module Cicada
       vec_diffs.map! { |e| apply_scale(Vector[*e.toArray]) }
       corrected_vec_diffs = []
 
-      if @parameters[:correct_images] then
+      if c.nil? then
+        corrected_vec_diffs = vec_diffs
+      else
         iobjs.each do |iobj|
           begin
             corrected_vec_diffs << correct_single_object(c, iobj, ref_ch, corr_ch)
@@ -189,9 +188,7 @@ module Cicada
             iobj.setCorrectionSuccessful(false)
           end
         end
-        corrected_vec_diffs.map! { |e| apply_scale(e) }
-      else 
-        corrected_vec_diffs = vec_diffs
+        corrected_vec_diffs.map! { |e| apply_scale(e) }    
       end
   
       print_distance_components(vec_diffs, corrected_vec_diffs)
@@ -262,51 +259,28 @@ module Cicada
     # @param [Array<ImageObject>] an array containing the image objects from which the in situ
     #  correction will be generated
     #
-    # @return [Array< Array<Numeric> >] an array containing the x, y, and z corrections; each
-    #  correction is a 2-element array containing the slope and intercept for the fit in each
-    #  dimension.  The intercept will be zero if disabled in the parameter file.
+    # @return [InSituCorrection] an InSituCorrection object containing the necessary information
+    #  to perform the correction.
     #
     def generate_in_situ_correction_from_iobjs(iobjs_for_in_situ_corr)
       ref_ch = @parameters[:reference_channel].to_i
       corr_ch = @parameters[:channel_to_correct].to_i
       cicada_ch = @parameters[:in_situ_aberr_corr_channel]
 
-      corr_diffs = Matrix.rows(iobjs_for_in_situ_corr.map { |iobj| iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, cicada_ch).toArray })
-      expt_diffs = Matrix.rows(iobjs_for_in_situ_corr.map { |iobj| iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray })
-
-      bslf = BisquareLinearFit.new
-      bslf.disableIntercept if @parameters[:disable_in_situ_corr_constant_offset]
-      all_parameters = 0.upto(corr_diffs.column_size - 1).collect do |i|
-        bslf.fit_rb(corr_diffs.column(i), expt_diffs.column(i)).toArray
-      end
-     
-      all_parameters
+      InSituCorrection.new(ref_ch, cicada_ch, corr_ch, iobjs_for_in_situ_corr, @parameters[:disable_in_situ_corr_constant_offset])
     end
 
     ##
     # Applies an in situ aberration correction to an array of image objects.
     #
     # @param [Enumerable<ImageObject>] iobjs the objects to be corrected
-    # @param [Array< Array<Numeric> >] corr_params the in situ correction parameters (an array
-    #  for each dimension containing the correction's slope and intercept).
-    # 
+    # @param [InSituCorrection] isc the in situ correction object.
+    #
     # @return [Array< Array <Numeric> >] an array of the corrected vector distance between
     #  wavelengths for each image object being corrected.
     #
-    def apply_in_situ_correction(iobjs, corr_params)
-      corr_params = corr_params.transpose
-      ref_ch = @parameters[:reference_channel].to_i
-      corr_ch = @parameters[:channel_to_correct].to_i
-      cicada_ch = @parameters[:in_situ_aberr_corr_channel]
-
-      corrected_differences = iobjs.map do |iobj|
-        corr_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, cicada_ch).toArray.to_a
-        expt_diff = iobj.getCorrectedVectorDifferenceBetweenChannels(ref_ch, corr_ch).toArray.to_a
-        correction = (corr_diff.ewise * corr_params[0]).ewise + corr_params[1]
-        Vector.elements(expt_diff.ewise - correction, false)
-      end
-
-      corrected_differences    
+    def apply_in_situ_correction(iobjs, isc)
+      isc.apply(iobjs)
     end
 
     ##

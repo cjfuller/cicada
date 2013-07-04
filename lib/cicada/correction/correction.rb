@@ -33,11 +33,6 @@ require 'facets/enumerable/ewise'
 module Cicada
 
   ##
-  # An error indicating that a position cannot be corrected (probably due to incomplete
-  # coverage in the correction dataset).
-  class UnableToCorrectError < StandardError; end
-
-  ##
   # Stores data for a standard 3d high-resolution colocalization correction, including
   # positions for a number of objects used for correction, and local quadratic fits of
   # aberration near these objects.  Can correct 2d positions based upon this data.
