@@ -173,7 +173,7 @@ module Cicada
     # @return [String] the absolute path to the in situ correction data file
     #
     def self.in_situ_corr_data_filename(p)
-      dir = [:data_directory]
+      dir = p[:data_directory]
       File.expand_path(p[:in_situ_aberr_corr_basename_set].split(MULTI_NAME_SEP)[0] + POS_XML_EXTENSION, dir)
     end
 

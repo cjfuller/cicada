@@ -36,6 +36,7 @@ require 'edu/stanford/cfuller/imageanalysistools/resources/common_methods'
 require 'cicada/file_interaction'
 require 'cicada/correction/correction'
 require 'cicada/correction/position_corrector'
+require 'cicada/correction/in_situ_correction'
 require 'cicada/fitting/p3d_fitter'
 
 java_import Java::java.util.concurrent.Executors
@@ -442,7 +443,7 @@ module Cicada
       diffs = pc.apply_correction(c, image_objects)
       corrected_image_objects = []
       image_objects.each do |iobj|
-        if iobj.getCorrectionSuccessful then   
+        if iobj.getCorrectionSuccessful or not @parameters[:correct_images] then   
           corrected_image_objects << iobj
         end
       end
@@ -453,15 +454,21 @@ module Cicada
       fitparams = df.fit(image_objects, diffs)
       @logger.info { "p3d fit parameters: #{fitparams.join(', ')}" }
 
-      if @parameters[:in_situ_aberr_corr_basename] and @parameters[:in_situ_aberr_corr_channel] then
-        isc = pc.determine_in_situ_aberration_correction
-        vector_diffs = pc.apply_in_situ_aberration_correction(image_objects, isc)
+      if @parameters[:in_situ_aberr_corr_basename_set] and @parameters[:in_situ_aberr_corr_channel] then
+        isc_iobjs = FileInteraction.read_in_situ_corr_data(@parameters)
+        isc = InSituCorrection.new(@parameters[:reference_channel].to_i,
+                                   @parameters[:in_situ_aberr_corr_channel].to_i,
+                                   @parameters[:channel_to_correct].to_i,
+                                   isc_iobjs,
+                                   @parameters[:disable_in_situ_corr_constant_offset])
+        vector_diffs = isc.apply(image_objects)
+        vector_diffs.map! { |v| pc.apply_scale(v) }
         scalar_diffs = get_scalar_diffs_from_vector(vector_diffs)
         corr_fit_params = df.fit(image_objects, scalar_diffs)
-        FileInteraction.write_differences(diffs, @parameters)
+        FileInteraction.write_differences(scalar_diffs, @parameters)
 
         if corr_fit_params then
-          @logger.info { "p3d fit parameters after in situ correction: #{fitparams.join(', ') }" }       
+          @logger.info { "p3d fit parameters after in situ correction: #{corr_fit_params.join(', ') }" }       
         else
           @logger.info { "unable to fit after in situ correction" } 
         end
